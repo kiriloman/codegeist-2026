@@ -1,0 +1,102 @@
+# Faultline — Codegeist 2026
+# [VERIFY] notes mark schema points to confirm against
+# developer.atlassian.com/platform/forge/manifest-reference during `forge register` —
+# each is isolated to a single line by design.
+
+app:
+  id: ari:cloud:ecosystem::app/faultline # [VERIFY] replace with the id `forge register` prints
+
+modules:
+  # --- The assignable Rovo chat agent -------------------------------------
+  rovo:agent:
+    - key: faultline-agent
+      name: Faultline
+      icon: "🔍" # [VERIFY] emoji-string form; resource reference also possible
+      description: >-
+        PR review copilot. Builds the reviewer's context on every pull request,
+        ranks where to look first, and answers questions with cited evidence.
+      title: Faultline
+      instructions: file:./src/agent/instructions.md
+      actions:
+        - list-open-prs
+        - get-review-context
+        - get-file-risk
+        - analyze-pr
+
+  # --- Tools the agent (and judges) can call ------------------------------
+  # Descriptions state each action's ARGUMENT CONTRACT so the model never has
+  # to guess how to call the next tool.
+  rovo:action:
+    - key: list-open-prs
+      function: agent-actions
+      name: List open PRs
+      description: >-
+        List open pull requests on repos Faultline has analyzed. Returns fields
+        workspace, repo, prId, title, analyzed, topRisk — use those exact values
+        as arguments for the other actions. No arguments needed.
+    - key: get-review-context
+      function: agent-actions
+      name: Get review context
+      description: >-
+        Get the stored risk ranking and evidence digest for one pull request.
+        Arguments: ws (Bitbucket workspace), repo (repository slug), prId (number).
+    - key: get-file-risk
+      function: agent-actions
+      name: Get file risk
+      description: >-
+        Get the risk score, tier and reasons for one file in a pull request.
+        Arguments: ws, repo, prId, path (file path; partial paths are tolerated).
+    - key: analyze-pr
+      function: agent-actions
+      name: Analyze a pull request
+      description: >-
+        Run a fresh risk analysis for a pull request now: fetches the PR, ranks
+        its changed files, posts or updates the guide comment, and returns the
+        ranked result. Arguments: ws, repo, prId.
+
+  # --- Webhook + MCP endpoints (ONE webtrigger block: a duplicate top-level
+  #     key here would silently drop a module) ---
+  webtrigger:
+    - key: pr-webhook
+      function: pr-webhook
+      # Wire the printed URL into a Bitbucket webhook created VIA THE API
+      # (POST /2.0/repositories/{ws}/{repo}/hooks) — the repo-settings UI cannot
+      # send the Authorization header. Triggers: Pull request: Created + Commits updated.
+    - key: mcp-endpoint
+      function: mcp-endpoint
+      # `forge webtrigger mcp-endpoint` prints the URL; point any MCP client at it
+      # (with the Bearer token if configured).
+      # [VERIFY] swap to the native Forge MCP server module once its schema is confirmed.
+
+  # --- Transparent admin/activity page (UI Kit 1: resolvers live in the bundle) ---
+  jira:globalPage:
+    - key: faultline-admin
+      resource: main
+      title: Faultline
+
+  function:
+    - key: pr-webhook
+      handler: resolvers/index.runPrWebhook
+    - key: agent-actions
+      handler: resolvers/index.runAgentAction
+    - key: mcp-endpoint
+      handler: resolvers/index.runMcpEndpoint
+
+resources:
+  - key: main
+    path: src/frontend/index.jsx
+
+permissions:
+  # [VERIFY] current @forge/cli requires a fraudProtection block for webtrigger
+  # modules — the value (true/false) must be confirmed against current docs.
+  fraudProtection:
+    required: false
+  scopes:
+    - read:pullrequest:bitbucket # diffstat, PR meta, PR-list reads [VERIFY] exact string
+    - write:pullrequest:bitbucket # PR comments POST/PUT [VERIFY] exact string
+    - read:repository:bitbucket # commits?path= churn lookups [VERIFY] exact string
+    - search:confluence # CQL postmortem search [VERIFY] exact string
+  # Teamwork Graph (blast radius, TWG bonus track): add the granular scope(s) matching
+  # your registered traversal when you set TWG_BLAST_RADIUS_QUERY_KEY, e.g.:
+  #   - read:graph:page:confluence
+  # [VERIFY] scope strings against the curated-queries docs during setup.
