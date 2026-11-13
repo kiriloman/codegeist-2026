@@ -12,10 +12,25 @@ function escapeCqlPhrase(s) {
 
 /**
  * Build the CQL query that finds postmortem pages referencing a file path.
- * Uses a quoted phrase so tokenization matches the path as a phrase sequence.
+ * CQL `text ~` tokenizes on "/" and "." — deploy-verified findings:
+ *   - full token sequences with extensions fail ("retry js" → 0; "js" is not
+ *     indexed as a separate token from code blocks)
+ *   - the path with separators→spaces AND the file extension stripped matches
+ *     ("src payments retry" → 2 hits; the raw form is OR'd as a bonus).
  */
 function buildPostmortemCql(path) {
-  return `${POSTMORTEM_FILTER} AND text ~ "${escapeCqlPhrase(path)}"`;
+  const escaped = escapeCqlPhrase(path);
+  // Split camelCase too: Confluence indexes "checkoutRetry" as one token that
+  // then fails to match — deploy-verified. Lowercase everything for the
+  // spaced form so the index's own tokenization aligns with the query.
+  const spaced = escapeCqlPhrase(
+    String(path)
+      .replace(/\.[a-z0-9]+$/i, '')
+      .replace(/([a-z])([A-Z])/g, '$1 $2')
+      .replace(/[\u002f._]+/g, ' ')
+      .toLowerCase()
+  );
+  return `${POSTMORTEM_FILTER} AND (text ~ "${escaped}" OR text ~ "${spaced}")`;
 }
 
 /**

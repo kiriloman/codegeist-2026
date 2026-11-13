@@ -61,8 +61,10 @@ test('guide renders evidence-layer unavailability instead of faking "no history"
   assert.ok(g.includes('NOT an absence of incident history'), 'failure ≠ absence');
 
   const g2 = renderGuide(pr, ranked, { blastStatus: 'unavailable', blastReason: 'TWG query key not configured' });
-  assert.ok(g2.includes('**Blast-radius evidence unavailable**'));
-  assert.ok(g2.includes('TWG query key not configured'));
+  assert.ok(g2.includes('Blast-radius evidence layer not configured'), 'permanent state rendered as footnote');
+  assert.ok(g2.includes('TWG query key not configured'), 'reason shown');
+  // permanent states must NOT use the loud warning form
+  assert.ok(!g2.includes('**Blast-radius evidence unavailable**'), 'permanent ≠ error');
 });
 
 test('guide discloses truncation and lookup caps', () => {

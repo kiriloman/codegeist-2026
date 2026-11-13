@@ -38,12 +38,25 @@ function renderGuide(pr, ranked, meta = {}) {
   L.push('');
 
   // Evidence-layer availability — a failed lookup must never read as "no history".
+  // Distinguish permanent states (layer not configured — quiet footnote) from
+  // live failures (layer configured but erroring — prominent warning), so the
+  // warnings never become noise on every PR.
+  const permanentPostmortem = /not configured|companion site app/i.test(meta.postmortemsReason || '');
   if (meta.postmortemsStatus === 'unavailable') {
-    L.push(`> ⚠️ **Postmortem evidence unavailable** (${meta.postmortemsReason || 'lookup failed'}) — this ranking uses heuristics only. That is a data-fetch failure, NOT an absence of incident history.`);
+    if (permanentPostmortem) {
+      L.push(`> ℹ️ Postmortem evidence layer not configured (${meta.postmortemsReason}) — rankings use heuristics only. This is a setup state, not an absence of incident history.`);
+    } else {
+      L.push(`> ⚠️ **Postmortem evidence unavailable** (${meta.postmortemsReason || 'lookup failed'}) — this ranking uses heuristics only. That is a data-fetch failure, NOT an absence of incident history.`);
+    }
     L.push('');
   }
+  const permanentBlast = /not configured/i.test(meta.blastReason || '');
   if (meta.blastStatus === 'unavailable') {
-    L.push(`> ⚠️ **Blast-radius evidence unavailable** (${meta.blastReason || 'lookup failed'}) — dependency signals were not included in this ranking.`);
+    if (permanentBlast) {
+      L.push(`> ℹ️ Blast-radius evidence layer not configured (${meta.blastReason}) — dependency signals were not included.`);
+    } else {
+      L.push(`> ⚠️ **Blast-radius evidence unavailable** (${meta.blastReason || 'lookup failed'}) — dependency signals were not included in this ranking.`);
+    }
     L.push('');
   }
 

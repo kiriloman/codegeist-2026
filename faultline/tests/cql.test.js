@@ -69,6 +69,7 @@ test('isAuthorized: token set → exact bearer required (fail-closed)', () => {
   delete process.env.FAULTLINE_ALLOW_UNAUTHENTICATED;
   assert.equal(isAuthorized({ headers: { Authorization: 'Bearer sekrit' } }), true);
   assert.equal(isAuthorized({ headers: { authorization: 'Bearer sekrit' } }), true, 'lowercase header accepted');
+  assert.equal(isAuthorized({ headers: { Authorization: ['Bearer sekrit'] } }), true, 'array-valued header (webtrigger contract)');
   assert.equal(isAuthorized({ headers: { Authorization: 'Bearer wrong' } }), false);
   assert.equal(isAuthorized({ headers: {} }), false);
   assert.equal(isAuthorized({}), false);

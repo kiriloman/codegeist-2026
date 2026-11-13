@@ -1,74 +1,125 @@
 # Faultline — Codegeist 2026
-# [VERIFY] notes mark schema points to confirm against
-# developer.atlassian.com/platform/forge/manifest-reference during `forge register` —
-# each is isolated to a single line by design.
+# Schema-verified against the CLI's own manifest-schema.json (CLI 15.x):
+# - runtime lives inside app:
+# - rovo:agent requires key/name/prompt (inline string), no title
+# - actions are defined as `action` modules (required: function, description,
+#   actionType, key) and referenced by key from rovo:agent and rovo:mcp
+# - rovo:mcp is the native MCP server module — the bonus-track path
+# - jira:globalPage uses a Custom UI resource (directory with index.html)
 
 app:
-  id: ari:cloud:ecosystem::app/faultline # [VERIFY] replace with the id `forge register` prints
+  id: ari:cloud:ecosystem::app/ef448580-8359-4dae-8b3c-50d3202b6472
+  runtime:
+    name: nodejs22.x
+  # Required for KVS access: declares what kind of data the app stores.
+  # Faultline stores derived app data (risk rankings, PR titles, digests) — "other".
+  storage:
+    classifications:
+      - other
 
 modules:
   # --- The assignable Rovo chat agent -------------------------------------
   rovo:agent:
     - key: faultline-agent
       name: Faultline
-      icon: "🔍" # [VERIFY] emoji-string form; resource reference also possible
+      icon: "🔍"
       description: >-
-        PR review copilot. Builds the reviewer's context on every pull request,
-        ranks where to look first, and answers questions with cited evidence.
-      title: Faultline
-      instructions: file:./src/agent/instructions.md
+        PR review copilot: ranks where a reviewer's attention matters on every
+        pull request, backed by your own postmortems and dependency graph, with
+        cited evidence. The LLM never reviews code — the guide is deterministic.
+      prompt: |-
+        You are Faultline, a pull-request review copilot living inside this Atlassian site.
+        Your job: defend the reviewer's attention. You build context, rank where to look,
+        and answer questions about pull requests — with evidence, never vibes.
+
+        Non-negotiable rules:
+        1. Only state facts that come from your tools (list-open-prs, get-review-context,
+           get-file-risk, analyze-pr). Never invent file names, scores, histories, or PR numbers.
+        2. Every factual claim carries its evidence: the file path, the risk score, and the
+           stated reason from the stored analysis. Quote it, don't paraphrase it loosely.
+        3. If you don't know, say so — and you can fix it: call analyze-pr (arguments: ws,
+           repo, prId) to run a fresh analysis on demand.
+        4. You never tell a reviewer to skip a file. Rankings are a starting point, not a
+           verdict. If asked "can I skip X?", say every changed file deserves eyes, and the
+           ranking only tells them where to start.
+        5. Be concise. Prefer a short answer with one citation over a paragraph.
+
+        Tone: friendly, precise, slightly allergic to hype. A senior engineer's helpful
+        colleague — not a cheerleader. No emoji spam (the guide has its own icons).
+
+        Example exchanges:
+        - "why is retry.js risky?" → "🔴 src/payments/retry.js — risk 78/100 (CRITICAL).
+          Reasons: payment-critical path · no test changes included in this PR · changed 11×
+          in recent history. That's from the stored analysis for this PR — the full table is
+          in the review guide comment."
+        - "should I skip the CSS file?" → "I can't recommend skipping any file — rankings
+          are a starting point, not a verdict. That said, styles/theme.css scored 12/100
+          (LOW): styling/static assets, small change."
+        - "what changed in PR 51?" → "I don't have a stored analysis for PR #51. Want me to
+          run one now? I just need the workspace and repo."
+      conversationStarters:
+        - Which of my open PRs needs my attention first?
+        - Why is retry.js risky?
+        - Analyze PR #1 in my repo
       actions:
         - list-open-prs
         - get-review-context
         - get-file-risk
         - analyze-pr
 
-  # --- Tools the agent (and judges) can call ------------------------------
-  # Descriptions state each action's ARGUMENT CONTRACT so the model never has
-  # to guess how to call the next tool.
-  rovo:action:
+  # --- Agent + MCP tools (schema: function, description, actionType, key) --
+  action:
     - key: list-open-prs
-      function: agent-actions
+      actionType: faultline:pr:list
+      function: agent-tools
       name: List open PRs
       description: >-
-        List open pull requests on repos Faultline has analyzed. Returns fields
-        workspace, repo, prId, title, analyzed, topRisk — use those exact values
-        as arguments for the other actions. No arguments needed.
+        Lists open pull requests on repos Faultline has analyzed. Returns
+        workspace, repo, prId, title, analyzed, topRisk — use those exact
+        values as arguments for the other actions.
     - key: get-review-context
-      function: agent-actions
+      actionType: faultline:pr:context
+      function: agent-tools
       name: Get review context
       description: >-
         Get the stored risk ranking and evidence digest for one pull request.
-        Arguments: ws (Bitbucket workspace), repo (repository slug), prId (number).
+        Arguments: ws (Bitbucket workspace), repo (repository slug), prId
+        (number).
     - key: get-file-risk
-      function: agent-actions
+      actionType: faultline:file:risk
+      function: agent-tools
       name: Get file risk
       description: >-
         Get the risk score, tier and reasons for one file in a pull request.
-        Arguments: ws, repo, prId, path (file path; partial paths are tolerated).
+        Arguments: ws, repo, prId, path (file path; partial paths tolerated).
     - key: analyze-pr
-      function: agent-actions
+      actionType: faultline:pr:analyze
+      function: agent-tools
       name: Analyze a pull request
       description: >-
         Run a fresh risk analysis for a pull request now: fetches the PR, ranks
         its changed files, posts or updates the guide comment, and returns the
         ranked result. Arguments: ws, repo, prId.
 
-  # --- Webhook + MCP endpoints (ONE webtrigger block: a duplicate top-level
-  #     key here would silently drop a module) ---
+  # --- Native MCP server (Best App with Atlassian MCP bonus track) ---------
+  rovo:mcp:
+    - key: faultline-mcp
+      name: Faultline
+      tools:
+        - list-open-prs
+        - get-review-context
+        - get-file-risk
+        - analyze-pr
+
+  # --- Bitbucket PR webhook --------------------------------------------------
   webtrigger:
-    - key: pr-webhook
+    - key: pr-webhook-trigger
       function: pr-webhook
       # Wire the printed URL into a Bitbucket webhook created VIA THE API
       # (POST /2.0/repositories/{ws}/{repo}/hooks) — the repo-settings UI cannot
       # send the Authorization header. Triggers: Pull request: Created + Commits updated.
-    - key: mcp-endpoint
-      function: mcp-endpoint
-      # `forge webtrigger mcp-endpoint` prints the URL; point any MCP client at it
-      # (with the Bearer token if configured).
-      # [VERIFY] swap to the native Forge MCP server module once its schema is confirmed.
 
-  # --- Transparent admin/activity page (UI Kit 1: resolvers live in the bundle) ---
+  # --- Transparent admin/activity page (Custom UI) ---------------------------
   jira:globalPage:
     - key: faultline-admin
       resource: main
@@ -77,26 +128,31 @@ modules:
   function:
     - key: pr-webhook
       handler: resolvers/index.runPrWebhook
-    - key: agent-actions
+    - key: agent-tools
       handler: resolvers/index.runAgentAction
-    - key: mcp-endpoint
-      handler: resolvers/index.runMcpEndpoint
+    - key: recent-analyses
+      handler: resolvers/index.runRecentAnalyses
 
 resources:
   - key: main
-    path: src/frontend/index.jsx
+    path: src/frontend
 
 permissions:
-  # [VERIFY] current @forge/cli requires a fraudProtection block for webtrigger
-  # modules — the value (true/false) must be confirmed against current docs.
-  fraudProtection:
-    required: false
+  external:
+    fetch:
+      backend:
+        - "https://*.atlassian-dev.net/*"   # companion site app webtrigger (evidence bridge)
+        - "https://*.atlassian.net/*"       # Atlassian-hosted endpoints
   scopes:
-    - read:pullrequest:bitbucket # diffstat, PR meta, PR-list reads [VERIFY] exact string
-    - write:pullrequest:bitbucket # PR comments POST/PUT [VERIFY] exact string
-    - read:repository:bitbucket # commits?path= churn lookups [VERIFY] exact string
-    - search:confluence # CQL postmortem search [VERIFY] exact string
-  # Teamwork Graph (blast radius, TWG bonus track): add the granular scope(s) matching
-  # your registered traversal when you set TWG_BLAST_RADIUS_QUERY_KEY, e.g.:
-  #   - read:graph:page:confluence
-  # [VERIFY] scope strings against the curated-queries docs during setup.
+    - read:pullrequest:bitbucket
+    - write:pullrequest:bitbucket
+    - read:repository:bitbucket
+    - storage:app
+    # ARCHITECTURE CONSTRAINT (deploy-validated): ALL Bitbucket scopes are
+    # workspace-classified and cannot be mixed with site scopes (search:confluence)
+    # in one app. Chosen: the Bitbucket core loop (webhook → analysis → guide
+    # comment). Consequence: the Confluence postmortem layer degrades honestly
+    # to "evidence unavailable (search responded 403)" — it renders in the guide
+    # as a fetch failure, never as "no incident history".
+  # Teamwork Graph (blast radius, TWG bonus track): add the granular scope(s)
+  # matching your registered traversal when you set TWG_BLAST_RADIUS_QUERY_KEY.

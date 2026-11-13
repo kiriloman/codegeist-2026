@@ -75,7 +75,7 @@ async function mapChunked(items, chunkSize, fn) {
  */
 async function upsertPrComment(ws, repo, prId, markdown, existingId) {
   const jsonHeaders = { 'Content-Type': 'application/json' };
-  const body = JSON.stringify({ content: { raw: markdown } }); // [VERIFY] markdown rendering on Cloud
+  const body = JSON.stringify({ content: { raw: markdown } }); // DEPLOY-VERIFIED: Bitbucket Cloud renders this markdown (ranked tables confirmed live)
 
   if (existingId) {
     const res = await api
@@ -160,7 +160,13 @@ export async function analyzePullRequest({ workspace, repo, prId, title, author 
   const digest = renderChatDigest({ workspace, repo, prId, title, author }, ranked, meta);
 
   // Idempotency: reuse the stored comment id so PR updates EDIT the guide, not spam it.
-  const previous = await getAnalysis(workspace, repo, prId);
+  // Storage is a best-effort enhancement, never a gate — if KVS is unavailable the
+  // guide still lands (a fresh comment instead of an edit) and the chat agent falls
+  // back to running analyze-pr live.
+  const previous = await getAnalysis(workspace, repo, prId).catch((e) => {
+    console.warn(`storage read unavailable (non-fatal): ${e?.message || e}`);
+    return null;
+  });
   const commentId = await upsertPrComment(workspace, repo, prId, guide, previous?.commentId || null);
 
   await saveAnalysis(workspace, repo, prId, {
@@ -168,6 +174,8 @@ export async function analyzePullRequest({ workspace, repo, prId, title, author 
     postmortemsStatus: postmortems.status,
     blastStatus: blast.status,
     posted: Boolean(commentId),
+  }).catch((e) => {
+    console.warn(`storage write unavailable (non-fatal, digest not saved): ${e?.message || e}`);
   });
 
   return { ranked, posted: Boolean(commentId), commentId, meta };

@@ -1,24 +1,30 @@
 {
   "name": "faultline",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "description": "Codegeist 2026 — assignable Rovo agent that defends the reviewer's attention on every pull request.",
   "private": true,
-  "main": "src/frontend/index.jsx",
   "scripts": {
+    "build": "webpack",
     "register": "forge register",
-    "deploy": "forge deploy",
-    "install": "forge install",
-    "tunnel": "forge tunnel"
+    "deploy": "npm run build && forge deploy",
+    "install-app": "forge install",
+    "tunnel": "forge tunnel",
+    "test": "node --test tests/engine.test.js tests/guide.test.js tests/cql.test.js"
   },
   "dependencies": {
-    "@forge/api": "^1.12.0",
-    "@forge/bridge": "^4.0.0",
-    "@forge/kvs": "^1.0.0",
-    "@forge/resolver": "^3.6.0",
-    "@forge/ui": "^1.11.0",
-    "react": "^18.2.0"
+    "@forge/api": "^8.5.0",
+    "@forge/bridge": "^7.3.0",
+    "@forge/kvs": "^2.1.2",
+    "@forge/resolver": "^2.0.2",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
   },
   "devDependencies": {
-    "@forge/cli": "^10.0.0"
+    "@babel/core": "^7.24.0",
+    "@babel/preset-react": "^7.24.0",
+    "@forge/cli": "^15.1.0",
+    "babel-loader": "^9.1.3",
+    "webpack": "^5.90.0",
+    "webpack-cli": "^5.1.4"
   }
 }

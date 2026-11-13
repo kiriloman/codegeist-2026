@@ -9,11 +9,7 @@
 // "no incident history exists".
 
 import api, { route } from '@forge/api';
-import { buildPostmortemCql, mapConfluenceResults, parseTwgDependents } from '../risk/cql';
-
-// Confluence site base, e.g. "https://your-site.atlassian.net" — set via:
-//   forge variables set SITE_URL "https://your-site.atlassian.net"
-const SITE_URL = process.env.SITE_URL || '';
+import { parseTwgDependents } from '../risk/cql';
 
 // Persisted Cypher query key registered for the blast-radius traversal — set via:
 //   forge variables set TWG_BLAST_RADIUS_QUERY_KEY "<queryKey from TWG registration>"
@@ -21,51 +17,49 @@ const TWG_ENDPOINT = '/gateway/api/graphql/twg';
 const TWG_QUERY_KEY = process.env.TWG_BLAST_RADIUS_QUERY_KEY || '';
 
 // ---------------------------------------------------------------------------
-// 1. Postmortem evidence
+// 1. Postmortem evidence (Confluence) — via the companion site app
 // ---------------------------------------------------------------------------
 
-/**
- * Count postmortem pages referencing each changed path (capped). Runs in
- * PARALLEL — sequential round-trips risk webhook timeouts. Returns a status
- * envelope: if every lookup failed (wrong scope, 429s, CQL rejection) the
- * status is 'unavailable' with the reason, so the guide can say so.
- */
+// The companion site app (faultline-site) carries the site-classified
+// search:confluence scope that this workspace app cannot mix with its
+// Bitbucket scopes. It exposes an authenticated POST endpoint returning the
+// same status envelope. Egress to it is allowlisted in the manifest
+// (permissions.external.fetch.backend). When unconfigured or unreachable,
+// the layer reports 'unavailable' with the reason — honestly, never as
+// "no incident history".
+const SITE_APP_URL = process.env.FAULTLINE_SITE_APP_URL || '';
+const SITE_APP_TOKEN = process.env.FAULTLINE_ENDPOINT_TOKEN || '';
+
 export async function fetchPostmortemCounts(paths, cap = 15) {
-  const list = paths.slice(0, cap);
+  const list = (paths || []).slice(0, cap);
   if (list.length === 0) return { status: 'ok', reason: null, byPath: {} };
-
-  const entries = await Promise.all(
-    list.map(async (path) => {
-      try {
-        const cql = buildPostmortemCql(path);
-        const res = await api
-          .asApp()
-          .requestConfluence(route`/wiki/rest/api/search?cql=${cql}&limit=5`);
-        if (!res.ok) {
-          console.warn(`postmortem lookup ${path} failed: ${res.status}`);
-          return [path, null, `search responded ${res.status}`];
-        }
-        const json = await res.json();
-        return [path, mapConfluenceResults(json, SITE_URL), null];
-      } catch (e) {
-        console.warn(`postmortem lookup ${path} threw: ${e?.message || e}`);
-        return [path, null, String(e?.message || e)];
-      }
-    })
-  );
-
-  const byPath = {};
-  let ok = 0;
-  let failures = 0;
-  let lastReason = null;
-  for (const [p, v, err] of entries) {
-    if (v) { byPath[p] = v; ok++; } else { failures++; lastReason = err; }
+  if (!SITE_APP_URL) {
+    return {
+      status: 'unavailable',
+      reason: 'companion site app URL not configured (FAULTLINE_SITE_APP_URL)',
+      byPath: {},
+    };
   }
-  // Every lookup failed → the evidence layer is down, not empty.
-  if (ok === 0 && failures > 0) {
-    return { status: 'unavailable', reason: lastReason || 'all lookups failed', byPath: {} };
+  try {
+    const res = await fetch(SITE_APP_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${SITE_APP_TOKEN}`,
+      },
+      body: JSON.stringify({ paths: list }),
+    });
+    if (!res.ok) {
+      return { status: 'unavailable', reason: `companion site app responded ${res.status}`, byPath: {} };
+    }
+    const json = await res.json();
+    if (json?.status === 'ok' || json?.status === 'unavailable') {
+      return { status: json.status, reason: json.reason || null, byPath: json.byPath || {} };
+    }
+    return { status: 'unavailable', reason: 'companion site app returned an unrecognized envelope', byPath: {} };
+  } catch (e) {
+    return { status: 'unavailable', reason: `companion site app unreachable: ${String(e?.message || e)}`, byPath: {} };
   }
-  return { status: 'ok', reason: failures > 0 ? `${failures} of ${list.length} lookups failed` : null, byPath };
 }
 
 // ---------------------------------------------------------------------------

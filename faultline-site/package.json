@@ -1,0 +1,19 @@
+{
+  "name": "faultline-site",
+  "version": "1.0.0",
+  "description": "Faultline companion site app — Confluence postmortem search via authenticated webtrigger (Codegeist 2026).",
+  "private": true,
+  "scripts": {
+    "register": "forge register",
+    "deploy": "forge deploy",
+    "install-app": "forge install",
+    "test": "node --test tests/cql.test.js"
+  },
+  "dependencies": {
+    "@forge/api": "^8.5.0",
+    "@forge/kvs": "^2.1.2"
+  },
+  "devDependencies": {
+    "@forge/cli": "^15.1.0"
+  }
+}

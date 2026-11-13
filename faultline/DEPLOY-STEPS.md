@@ -33,7 +33,7 @@ git push -u origin main
    - `permissions.fraudProtection` value (marked [VERIFY] in the manifest)
    - scope strings (`read:pullrequest:bitbucket`, `write:pullrequest:bitbucket`, `read:repository:bitbucket`, `search:confluence`)
    - `rovo:action` display field (`name` vs `title`)
-5. **Install on your site:** `forge install --site <yoursite>.atlassian.net` (org admin needed once TWG scopes are added in Phase 3).
+5. **Install on your site:** `forge install --site faultline1.atlassian.net` (org admin needed once TWG scopes are added in Phase 3).
 6. **Smoke test the auth fail-closed default:** with no variables set, the webtriggers reject everything — set the dev bypass for tunnel testing:
    ```bash
    forge variables set FAULTLINE_ALLOW_UNAUTHENTICATED 1
@@ -44,7 +44,7 @@ git push -u origin main
    curl -X POST https://api.bitbucket.org/2.0/repositories/<ws>/<repo>/hooks \
      -u <bitbucket-user>:<app-password> \
      -H "Content-Type: application/json" \
-     -d '{"url": "<pr-webhook URL from `forge webtrigger pr-webhook`>",
+     -d '{"url": "<pr-webhook URL from `forge webtrigger pr-webhook-trigger`>",
           "active": true,
           "events": ["pullrequest:created", "pullrequest:updated"]}'
    ```
@@ -58,7 +58,7 @@ git push -u origin main
 
 1. Set the site base for evidence links:
    ```bash
-   forge variables set SITE_URL "https://<yoursite>.atlassian.net"
+   forge variables set SITE_URL "https://faultline1.atlassian.net"
    ```
 2. **Seed the demo Confluence pages** (paste this content, label each page `postmortem`):
    - Title: `Postmortem: Checkout outage 2026-03-14` — body must contain the literal path `src/payments/retry.js` plus a sentence like "The retry logic in `src/payments/retry.js` double-charged 214 customers."
@@ -77,7 +77,7 @@ git push -u origin main
 ## PHASE 4 — Prove the two interactive surfaces
 
 1. **Rovo chat:** in Jira/Confluence, @Faultline: "why is retry.js risky?", "should I skip the CSS?", "analyze PR #N". Confirm answers carry citations. Tighten the dispatcher's shape handling if needed (log the payload in tunnel).
-2. **MCP:** connect Claude Desktop or Cursor to the `forge webtrigger mcp-endpoint` URL (with Bearer token — set `FAULTLINE_ENDPOINT_TOKEN` and remove the dev bypass now): full `initialize → tools/list → tools/call` round-trip.
+2. **MCP:** the native `rovo:mcp` manifest module serves the four `faultline_*`-equivalent tools automatically once the app is installed on a site — no custom endpoint to wire. In Rovo-compatible clients, the tools appear alongside the agent; verify one `analyze-pr` round-trip.
 
 ## PHASE 5 — Record + submit (by Dec 13–15, first-come prizes)
 
@@ -97,7 +97,7 @@ git push -u origin main
 
 **What it does:** When a PR opens, Faultline analyzes every changed file and posts ONE deterministic review guide: a ranked table (risk score, tier, labeled reasons), linked evidence (the actual Confluence postmortems that referenced the file, dependent services from the Teamwork Graph), a suggested review path, and a trust legend. Reviewers @mention the Faultline Rovo agent in chat and get answers with citations — never vibes. The same data is exposed as an MCP server for Claude/Cursor. The guide edits itself (idempotently) when the PR updates. Evidence lookups that fail say so explicitly — a fetch failure never masquerades as "no incident history."
 
-**How we built it:** Atlassian Forge (webtriggers, functions, UI Kit admin page), Bitbucket REST (diffstat, per-file commit history, idempotent comment upsert), Confluence CQL for postmortem evidence, Teamwork Graph (persisted Cypher traversal) for blast radius, a hand-rolled spec-conformant JSON-RPC 2.0 MCP endpoint, and a Rovo agent with citation-disciplined instructions. The scoring engine is pure, deterministic, and unit-tested — 29 tests pin the evidence hierarchy, the honest edge cases, and the fail-closed auth.
+**How we built it:** A two-app Forge architecture: the main app (Bitbucket workspace) handles the webhook → diffstat → deterministic ranking → idempotent PR-comment loop; a companion site app (Jira site) carries the Confluence CQL postmortem search that Forge's workspace/site scope separation forbids mixing into one app, exposed to the main app as an authenticated endpoint. The native `rovo:mcp` module shares the agent's four action tools. Teamwork Graph (persisted Cypher traversal) powers blast radius. The scoring engine is pure, deterministic, and unit-tested — 29 tests pin the evidence hierarchy, the honest edge cases, and the fail-closed auth.
 
 **Challenges / what we're proud of:** Every "AI review" tool has the LLM read the diff. Faultline's LLM never reads code — it only answers questions about deterministic, cited data. The hardest engineering is making honesty structural: unavailable evidence is rendered as unavailable, stacked heuristics are disclosed as beating evidence when they do, and the agent refuses to tell a reviewer to skip a file.
 

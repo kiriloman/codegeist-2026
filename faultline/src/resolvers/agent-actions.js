@@ -121,6 +121,12 @@ async function analyzePr(payload) {
     return { error: 'need ws (workspace), repo (slug) and prId — e.g. from list-open-prs.' };
   }
   const result = await analyzePrById(ws, repo, prId);
+  // Keyed pairs — never map over status VALUES (both would collapse to
+  // 'unavailable' and misreport WHICH evidence layer is down).
+  const warnings = [
+    result.meta.postmortemsStatus === 'unavailable' ? 'postmortem evidence unavailable' : null,
+    result.meta.blastStatus === 'unavailable' ? 'blast-radius evidence unavailable' : null,
+  ].filter(Boolean);
   return {
     analyzed: true,
     guidePosted: result.posted,
@@ -128,9 +134,7 @@ async function analyzePr(payload) {
       ? { path: result.ranked[0].path, score: result.ranked[0].score, tier: result.ranked[0].tier }
       : null,
     ranked: result.ranked,
-    warnings: [result.meta.postmortemsStatus, result.meta.blastStatus]
-      .filter((s) => s === 'unavailable')
-      .map((s) => (s === 'postmortemsStatus' ? 'postmortem evidence unavailable' : 'blast-radius evidence unavailable')),
+    warnings,
   };
 }
 
