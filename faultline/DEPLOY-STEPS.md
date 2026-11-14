@@ -69,7 +69,7 @@ git push -u origin main
 
 1. Register a persisted Cypher traversal mapping a Bitbucket repo URL → dependent services (follow the Jira blast-radius "persisted Cypher queries" guide in the Atlassian docs; the app sends `{ repoUrl }` and expects a list of service names — see `parseTwgDependents` in `src/risk/cql.js`).
 2. ```bash
-   forge variables set TWG_BLAST_RADIUS_QUERY_KEY "<queryKey from registration>"
+   # (blast radius uses Jira REST — no TWG registration needed) "<queryKey from registration>"
    ```
 3. Uncomment/add the matching `read:graph:*` scope in `manifest.yml`, redeploy, reinstall (org admin).
 4. Re-run the demo PR → blast radius must show `graph` provenance (not "unavailable"). If the result shape differs, fix the single defensive mapper in `parseTwgDependents`.

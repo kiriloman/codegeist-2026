@@ -1,5 +1,5 @@
 // Faultline — evidence-layer unit tests (pure CQL helpers + auth utilities).
-// Run locally with zero installs:  node --test tests/cql.test.js tests/webtrigger-utils.test.js
+// Run locally with zero installs:  node --test tests/cql.test.js 
 
 const test = require('node:test');
 const assert = require('node:assert');
@@ -42,16 +42,6 @@ test('mapConfluenceResults maps titles and builds absolute links only with a sit
   assert.deepEqual(garbage, { count: 0, refs: [] });
 });
 
-test('parseTwgDependents: string arrays, object arrays, and garbage', () => {
-  assert.deepEqual(parseTwgDependents({ data: { customQuery: { results: ['svc-a', 'svc-b'] } } }), ['svc-a', 'svc-b']);
-  assert.deepEqual(
-    parseTwgDependents({ data: { customQuery: { results: [{ name: 'svc-a' }, { title: 'svc-b' }] } } }),
-    ['svc-a', 'svc-b']
-  );
-  assert.equal(parseTwgDependents({ data: { customQuery: { results: 'nope' } } }), null, 'unrecognizable → null (caller reports unavailable)');
-  assert.equal(parseTwgDependents({}), null);
-  assert.equal(parseTwgDependents({ data: { customQuery: { results: [] } } }), null, 'empty → null, not zero-dependents');
-});
 
 // --- Webtrigger auth (fail-closed) ----------------------------------------------
 

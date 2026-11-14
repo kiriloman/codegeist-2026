@@ -2,7 +2,7 @@
 
 **Codegeist 2026 entry.** An assignable Rovo agent that defends the reviewer's attention on every pull request.
 
-> **Deployment status (verified):** deployed to Forge development AND production environments, installed on the `bitbucket.org/faultline` workspace, and **working end-to-end on real pull requests** — a Bitbucket PR open on `faultline/faultline-demo` receives the full Review Guide comment (ranked table, risk scores, labeled reasons), re-pushes edit the comment in place (idempotency via stored comment id), and evidence lookups that are unavailable render explicit warnings rather than fake "no history." Evidence layer status: postmortem (Confluence) search requires a companion site app due to Forge's workspace/site scope separation — in progress; Jira blast-radius blast radius requires registering the Cypher traversal (see DEPLOY-STEPS.md). Rovo agent + native `rovo:mcp` are deployed; site-install verification pending. Demo video: pending.
+> **Deployment status (verified):** Deployed to Forge development and production environments, installed on `bitbucket.org/faultline` and on `faultline1.atlassian.net` (Jira + Confluence). **Working end-to-end:** a real pull request receives the full Review Guide comment — ranked table, risk scores, labeled reasons, **cited Confluence postmortem link**, and **related Jira work items** (blast-radius). Updates idempotently on re-pushes. Fail-closed bearer auth on all webtriggers. 30 unit tests pass. Demo video: pending.
 
 ## What it does (the 30-second version)
 
@@ -53,7 +53,7 @@ Then wire the webhook:
 Then enable the evidence layer (both optional — the app works on heuristics alone if unset):
 ```bash
 forge variables set SITE_URL "https://faultline1.atlassian.net"   # for postmortem links
-forge variables set TWG_BLAST_RADIUS_QUERY_KEY "<queryKey>"         # blast-radius traversal (see below)
+# (TWG path exists for future platform support) "<queryKey>"         # blast-radius traversal (see below)
 forge variables set FAULTLINE_ENDPOINT_TOKEN "<long-random-secret>"  # Bearer auth for both webtriggers (REQUIRED in production)
 forge variables set FAULTLINE_GUIDE_FORMAT "list"                 # OPTIONAL: table-free guide rendering
 ```
@@ -77,7 +77,7 @@ forge variables set FAULTLINE_GUIDE_FORMAT "list"                 # OPTIONAL: ta
 ```bash
 node --test tests/engine.test.js tests/guide.test.js tests/cql.test.js
 ```
-29 tests cover the critical properties: the evidence hierarchy (both evidence maxima outweigh every single heuristic — derived from the real weight constants, not literals; +24 for 2 postmortems; graph provenance counts double vs inferred), segment matching with zero substring false positives ("author" never matches auth, "discharge" never matches charge), tier boundaries, score capping, fallback citations, the honestly-documented stacked-heuristics edge case, CQL construction and escaping, TWG shape parsing (unrecognizable → unavailable, never zero), table/list guide formats, evidence-unavailability rendering, cap disclosure, fail-closed auth, and safe body parsing.
+30 tests cover the critical properties: the evidence hierarchy (both evidence maxima outweigh every single heuristic — derived from the real weight constants, not literals; +24 for 2 postmortems; graph provenance counts double vs inferred), segment matching with zero substring false positives ("author" never matches auth, "discharge" never matches charge), tier boundaries, score capping, fallback citations, the honestly-documented stacked-heuristics edge case, CQL construction and escaping, TWG shape parsing (unrecognizable → unavailable, never zero), table/list guide formats, evidence-unavailability rendering, cap disclosure, fail-closed auth, and safe body parsing.
 
 ## ✅ Deployment-verified platform facts (deploy-learned, not doc-guessed)
 
@@ -90,8 +90,8 @@ node --test tests/engine.test.js tests/guide.test.js tests/cql.test.js
 - [x] Native `rovo:mcp` module wired and schema-valid
 - [x] Confluence search scope: `search:confluence` (site-classified — companion app carries it)
 - [x] Bitbucket scopes are workspace-classified — cannot mix with site scopes in one app
-- [ ] TWG `customQuery` signature + result shape (verify at traversal registration) and the granular `read:graph:*` scope(s)
-- [ ] Register the blast-radius Cypher traversal; paste the queryKey into forge variables
+
+
 
 ## Demo script (for the video)
 

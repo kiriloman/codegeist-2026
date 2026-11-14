@@ -1,5 +1,5 @@
 // Faultline — risk engine unit tests.
-// Run locally with zero installs:  node --test tests/engine.test.js tests/guide.test.js tests/cql.test.js tests/webtrigger-utils.test.js
+// Run locally with zero installs:  node --test tests/engine.test.js tests/guide.test.js tests/cql.test.js 
 // These pin the properties that make the app non-generic:
 // (1) evidence signals outrank any SINGLE heuristic, (2) segment matching has no
 // substring false positives, (3) stacked heuristics can still beat evidence

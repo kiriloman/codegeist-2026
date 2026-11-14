@@ -1,6 +1,6 @@
 // Faultline — pure CQL / response-shaping helpers for the evidence layer.
 // Everything here is I/O-free so the evidence layer's logic is unit-testable
-// without a Confluence or Teamwork Graph connection. Pure functions, CJS.
+// without a Confluence connection. Pure functions, CJS.
 
 const POSTMORTEM_FILTER =
   '(label = "postmortem" OR label = "incident-review" OR title ~ "postmortem")';
@@ -49,32 +49,4 @@ function mapConfluenceResults(json, siteUrl) {
   return { count, refs };
 }
 
-/**
- * Parse a Teamwork Graph customQuery response into a list of dependent
- * service names. Defensive by design: accepts a string array, an array of
- * objects carrying name/title fields, OR the TWG edge format (edges → item → data).
- * Returns null when the shape is unrecognizable (caller treats null as
- * unavailable, not as zero dependents).
- */
-function parseTwgDependents(json) {
-  const raw = json?.data?.customQuery?.results;
-  if (!Array.isArray(raw)) return null;
-  const names = raw
-    .map((r) => {
-      if (typeof r === 'string') return r;
-      // Direct object with name/title
-      if (r?.name || r?.title) return r.name || r.title;
-      // TWG edge format: { item: { data: { key, summary } } }
-      if (r?.item?.data) return r.item.data.key || r.item.data.summary || null;
-      // Nested edge format
-      if (r?.edges && Array.isArray(r.edges)) {
-        const first = r.edges[0];
-        return first?.item?.data?.key || first?.item?.data?.summary || null;
-      }
-      return null;
-    })
-    .filter(Boolean);
-  return names.length > 0 ? names : null;
-}
-
-module.exports = { buildPostmortemCql, escapeCqlPhrase, mapConfluenceResults, parseTwgDependents, POSTMORTEM_FILTER };
+module.exports = { buildPostmortemCql, escapeCqlPhrase, mapConfluenceResults, POSTMORTEM_FILTER };

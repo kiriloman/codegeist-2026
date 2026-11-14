@@ -73,7 +73,7 @@ function scoreFile(file, history = {}) {
     }
   }
 
-  // ---- Tier 1b: blast radius from the Teamwork Graph ----
+  // ---- Tier 1b: related Jira work items (blast-radius search) ----
   // Max graph weight (32) exceeds the strongest single heuristic (30), so BOTH evidence
   // signals outrank any single heuristic — the invariant the guide legend states.
   const deps = history.dependents?.length || 0;

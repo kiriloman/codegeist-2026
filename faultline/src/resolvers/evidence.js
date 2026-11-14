@@ -11,11 +11,10 @@
 import api, { route } from '@forge/api';
 
 // Persisted Cypher query key registered for the blast-radius traversal — set via:
-//   forge variables set TWG_BLAST_RADIUS_QUERY_KEY "<queryKey from TWG registration>"
-const TWG_QUERY_KEY = process.env.TWG_BLAST_RADIUS_QUERY_KEY || '';
+//   forge variables set FAULTLINE_JIRA_BRIDGE_KEY "<queryKey from TWG registration>"
+const JIRA_QUERY_KEY = process.env.FAULTLINE_JIRA_BRIDGE_KEY || '';
 const SITE_APP_URL = process.env.FAULTLINE_SITE_APP_URL || '';
 const SITE_APP_TOKEN = process.env.FAULTLINE_ENDPOINT_TOKEN || '';
-const USER_ARI = process.env.FAULTLINE_TWG_USER_ARI || '';
 
 // ---------------------------------------------------------------------------
 // 1. Postmortem evidence (Confluence) — via the companion site app
@@ -62,7 +61,7 @@ export async function fetchPostmortemCounts(paths, cap = 15) {
 }
 
 // ---------------------------------------------------------------------------
-// 2. Blast radius (Teamwork Graph)
+// 2. Blast radius (Jira work items)
 // ---------------------------------------------------------------------------
 
 const unavailable = (reason) => ({ status: 'unavailable', reason, dependents: [], sourceUrl: null });
@@ -78,8 +77,8 @@ const unavailable = (reason) => ({ status: 'unavailable', reason, dependents: []
  */
 export async function fetchDependentServices({ workspace, repo, title }) {
   const TWG_BRIDGE_URL = process.env.FAULTLINE_TWG_BRIDGE_URL || '';
-  if (!TWG_BRIDGE_URL || !TWG_QUERY_KEY) {
-    return unavailable('TWG bridge not configured (FAULTLINE_TWG_BRIDGE_URL or TWG_BLAST_RADIUS_QUERY_KEY)');
+  if (!TWG_BRIDGE_URL || !JIRA_QUERY_KEY) {
+    return unavailable('Jira bridge not configured (FAULTLINE_TWG_BRIDGE_URL or FAULTLINE_JIRA_BRIDGE_KEY)');
   }
 
   // Route through the companion site app (same bridge pattern as the postmortem
@@ -111,14 +110,14 @@ export async function fetchDependentServices({ workspace, repo, title }) {
       body: JSON.stringify({ searchText }),
     });
     if (!res.ok) {
-      return unavailable(`TWG bridge responded ${res.status}`);
+      return unavailable(`Jira bridge responded ${res.status}`);
     }
     const json = await res.json();
     if (json?.status === 'ok' && Array.isArray(json?.dependents)) {
       return { status: 'ok', reason: null, dependents: json.dependents, sourceUrl: null };
     }
-    return unavailable(json?.reason || 'TWG bridge returned unrecognized envelope');
+    return unavailable(json?.reason || 'Jira bridge returned unrecognized envelope');
   } catch (e) {
-    return unavailable(`TWG bridge unreachable: ${String(e?.message || e)}`);
+    return unavailable(`Jira bridge unreachable: ${String(e?.message || e)}`);
   }
 }
