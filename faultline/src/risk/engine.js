@@ -82,7 +82,7 @@ function scoreFile(file, history = {}) {
     let w = deps >= 5 ? 32 : deps >= 3 ? 20 : 10;
     if (inferred) w = Math.round(w / 2);
     score += w;
-    reasons.push(`🌐 EVIDENCE: changes propagate to ${deps} dependent service${deps > 1 ? 's' : ''}${inferred ? ' (inferred)' : ''}`);
+    reasons.push(`🌐 EVIDENCE: ${deps} related Jira work item${deps > 1 ? 's' : ''}${inferred ? ' (inferred)' : ''} mention this area`);
     evidence.push({
       kind: 'blast-radius',
       text: `${deps} dependent services (${history.dependentsProvenance || 'unknown provenance'})`,

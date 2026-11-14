@@ -9,11 +9,9 @@
 // "no incident history exists".
 
 import api, { route } from '@forge/api';
-import { parseTwgDependents } from '../risk/cql';
 
 // Persisted Cypher query key registered for the blast-radius traversal — set via:
 //   forge variables set TWG_BLAST_RADIUS_QUERY_KEY "<queryKey from TWG registration>"
-const TWG_ENDPOINT = '/gateway/api/graphql/twg';
 const TWG_QUERY_KEY = process.env.TWG_BLAST_RADIUS_QUERY_KEY || '';
 const SITE_APP_URL = process.env.FAULTLINE_SITE_APP_URL || '';
 const SITE_APP_TOKEN = process.env.FAULTLINE_ENDPOINT_TOKEN || '';

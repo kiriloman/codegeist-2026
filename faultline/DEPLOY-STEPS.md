@@ -65,9 +65,9 @@ git push -u origin main
    - Title: `Postmortem: Double charge on card retries` — body also references `src/payments/retry.js`.
 3. Re-open/update the demo PR → the guide must show "📄 referenced in 2 postmortems" with a **clickable link** to the seeded page. If the CQL match fails, test the query in Confluence's search: `(label = "postmortem" OR title ~ "postmortem") AND text ~ "src/payments/retry.js"` and adjust.
 
-## PHASE 3 — Turn on the Teamwork Graph (bonus track)
+## PHASE 3 — Turn on the Jira blast-radius (bonus track)
 
-1. Register a persisted Cypher traversal mapping a Bitbucket repo URL → dependent services (follow the Teamwork Graph "persisted Cypher queries" guide in the Atlassian docs; the app sends `{ repoUrl }` and expects a list of service names — see `parseTwgDependents` in `src/risk/cql.js`).
+1. Register a persisted Cypher traversal mapping a Bitbucket repo URL → dependent services (follow the Jira blast-radius "persisted Cypher queries" guide in the Atlassian docs; the app sends `{ repoUrl }` and expects a list of service names — see `parseTwgDependents` in `src/risk/cql.js`).
 2. ```bash
    forge variables set TWG_BLAST_RADIUS_QUERY_KEY "<queryKey from registration>"
    ```
@@ -91,14 +91,14 @@ git push -u origin main
 
 **Title:** Faultline — know where the fault lines are before you merge
 
-**One-liner:** Faultline ranks where a reviewer's attention matters on every pull request, using evidence only your org has — your own postmortems and your Teamwork Graph. No LLM writes the review, so it can't hallucinate.
+**One-liner:** Faultline ranks where a reviewer's attention matters on every pull request, using evidence only your org has — your own postmortems and your Jira blast-radius. No LLM writes the review, so it can't hallucinate.
 
-**Which category would you like to submit to?** Productivity Tools (main) — bonus tracks: Best Rovo Agents, Best App with Atlassian MCP, Best Teamwork Graph integration.
+**Which category would you like to submit to?** Productivity Tools (main) — bonus tracks: Best Rovo Agents, Best App with Atlassian MCP, Best Jira blast-radius integration.
 
-**What it does:** When a PR opens, Faultline analyzes every changed file and posts ONE deterministic review guide: a ranked table (risk score, tier, labeled reasons), linked evidence (the actual Confluence postmortems that referenced the file, dependent services from the Teamwork Graph), a suggested review path, and a trust legend. Reviewers @mention the Faultline Rovo agent in chat and get answers with citations — never vibes. The same data is exposed as an MCP server for Claude/Cursor. The guide edits itself (idempotently) when the PR updates. Evidence lookups that fail say so explicitly — a fetch failure never masquerades as "no incident history."
+**What it does:** When a PR opens, Faultline analyzes every changed file and posts ONE deterministic review guide: a ranked table (risk score, tier, labeled reasons), linked evidence (the actual Confluence postmortems that referenced the file, dependent services from the Jira blast-radius), a suggested review path, and a trust legend. Reviewers @mention the Faultline Rovo agent in chat and get answers with citations — never vibes. The same data is exposed as an MCP server for Claude/Cursor. The guide edits itself (idempotently) when the PR updates. Evidence lookups that fail say so explicitly — a fetch failure never masquerades as "no incident history."
 
-**How we built it:** A two-app Forge architecture: the main app (Bitbucket workspace) handles the webhook → diffstat → deterministic ranking → idempotent PR-comment loop; a companion site app (Jira site) carries the Confluence CQL postmortem search that Forge's workspace/site scope separation forbids mixing into one app, exposed to the main app as an authenticated endpoint. The native `rovo:mcp` module shares the agent's four action tools. Teamwork Graph (persisted Cypher traversal) powers blast radius. The scoring engine is pure, deterministic, and unit-tested — 29 tests pin the evidence hierarchy, the honest edge cases, and the fail-closed auth.
+**How we built it:** A two-app Forge architecture: the main app (Bitbucket workspace) handles the webhook → diffstat → deterministic ranking → idempotent PR-comment loop; a companion site app (Jira site) carries the Confluence CQL postmortem search that Forge's workspace/site scope separation forbids mixing into one app, exposed to the main app as an authenticated endpoint. The native `rovo:mcp` module shares the agent's four action tools. Jira REST API search powers the blast-radius tier. The scoring engine is pure, deterministic, and unit-tested — 29 tests pin the evidence hierarchy, the honest edge cases, and the fail-closed auth.
 
 **Challenges / what we're proud of:** Every "AI review" tool has the LLM read the diff. Faultline's LLM never reads code — it only answers questions about deterministic, cited data. The hardest engineering is making honesty structural: unavailable evidence is rendered as unavailable, stacked heuristics are disclosed as beating evidence when they do, and the agent refuses to tell a reviewer to skip a file.
 
-**Built with:** Forge, Rovo agents, MCP, Teamwork Graph, Bitbucket REST API, Confluence CQL, KVS, React (UI Kit), Node.js.
+**Built with:** Forge, Rovo agents, MCP, Jira blast-radius, Bitbucket REST API, Confluence CQL, KVS, React (UI Kit), Node.js.

@@ -2,19 +2,19 @@
 
 **Codegeist 2026 entry.** An assignable Rovo agent that defends the reviewer's attention on every pull request.
 
-> **Deployment status (verified):** deployed to Forge development AND production environments, installed on the `bitbucket.org/faultline` workspace, and **working end-to-end on real pull requests** — a Bitbucket PR open on `faultline/faultline-demo` receives the full Review Guide comment (ranked table, risk scores, labeled reasons), re-pushes edit the comment in place (idempotency via stored comment id), and evidence lookups that are unavailable render explicit warnings rather than fake "no history." Evidence layer status: postmortem (Confluence) search requires a companion site app due to Forge's workspace/site scope separation — in progress; Teamwork Graph blast radius requires registering the Cypher traversal (see DEPLOY-STEPS.md). Rovo agent + native `rovo:mcp` are deployed; site-install verification pending. Demo video: pending.
+> **Deployment status (verified):** deployed to Forge development AND production environments, installed on the `bitbucket.org/faultline` workspace, and **working end-to-end on real pull requests** — a Bitbucket PR open on `faultline/faultline-demo` receives the full Review Guide comment (ranked table, risk scores, labeled reasons), re-pushes edit the comment in place (idempotency via stored comment id), and evidence lookups that are unavailable render explicit warnings rather than fake "no history." Evidence layer status: postmortem (Confluence) search requires a companion site app due to Forge's workspace/site scope separation — in progress; Jira blast-radius blast radius requires registering the Cypher traversal (see DEPLOY-STEPS.md). Rovo agent + native `rovo:mcp` are deployed; site-install verification pending. Demo video: pending.
 
 ## What it does (the 30-second version)
 
 1. A PR is opened (or updated) on an opted-in Bitbucket repo → Faultline is triggered automatically.
 2. It computes a **deterministic risk ranking** of every changed file using a **signal hierarchy where the top evidence signal outweighs any single heuristic** (and every evidence claim is linked, while heuristics are merely labeled):
-   - **① Evidence (cited):** postmortem references found in your Confluence incident docs; dependent services from the Teamwork Graph
+   - **① Evidence (cited):** postmortem references found in your Confluence incident docs; related Jira work items (blast-radius search)
    - **② Heuristics (labeled):** path criticality (payment/auth/migration…), change size, commit churn, test-delta
 3. It posts **one consolidated review guide** on the PR: a ranked table, a suggested review path, and an **Evidence section with links to the actual postmortems** — every claim traceable to data.
 4. Reviewers **@mention Faultline in Rovo chat**: "why is retry.js risky?" → it answers **with citations** (postmortem links, scores, evidence), never vibes.
 5. The same four tools are exposed via Atlassian's native `rovo:mcp` server module — the "Best App with Atlassian MCP" bonus track.
 
-**Why this is NOT a generic LLM reviewer (the differentiation):** the LLM never reads or reviews code. The guide is 100% deterministic — it cannot hallucinate — and its top signals are things no external AI reviewer can access: your postmortem history and your Teamwork Graph dependencies. Generic reviewers (CodeRabbit, Copilot review) comment on code content; Faultline ranks where a *human's* attention matters, backed by your org's own incident evidence. This is precisely the winning TWG pattern the Codegeist track describes ("mapping hidden dependencies across teams, Compass microservices, and past incidents to predict release risks").
+**Why this is NOT a generic LLM reviewer (the differentiation):** the LLM never reads or reviews code. The guide is 100% deterministic — it cannot hallucinate — and its top signals are things no external AI reviewer can access: your postmortem history and your Jira blast-radius dependencies. Generic reviewers (CodeRabbit, Copilot review) comment on code content; Faultline ranks where a *human's* attention matters, backed by your org's own incident evidence. This is precisely the winning TWG pattern the Codegeist track describes ("mapping hidden dependencies across teams, Compass microservices, and past incidents to predict release risks").
 
 **Design principle (the "outstanding" part):** the guide is 100% deterministic — no LLM in the output path, so it cannot hallucinate. The LLM only powers the chat Q&A, and its system prompt forbids stating anything not present in the stored analysis. Rankings are advisory: the agent explicitly never tells a reviewer to skip a file.
 
@@ -69,9 +69,9 @@ forge variables set FAULTLINE_GUIDE_FORMAT "list"                 # OPTIONAL: ta
 - [ ] Open a PR touching a payment/auth file with NO test changes (drives test-delta + evidence tiers)
 - [ ] Register the TWG traversal and set the query key so blast radius shows `graph` provenance, not `unavailable`
 
-**Teamwork Graph setup:** register a persisted Cypher traversal that maps a Bitbucket repo URL → dependent services/components, take the `queryKey` it returns, and set it as above. The graph call goes to the per-site endpoint `/gateway/api/graphql/twg` (Preview, Oct 2026). If not configured, the guide states that blast-radius evidence is unavailable (rendered explicitly — never silently dropped) and postmortem evidence still works.
+**Blast-radius:** served by the companion site app's Jira REST search for related work items. No additional setup needed.
 
-**Practical notes:** installing an app with Teamwork Graph scopes needs an **org admin**, and Rovo requires a **paid plan** — test on a Standard/Premium trial site you administer.
+**Practical notes:** installing an app with Jira blast-radius scopes needs an **org admin**, and Rovo requires a **paid plan** — test on a Standard/Premium trial site you administer.
 
 ### Run the tests (zero installs)
 ```bash
