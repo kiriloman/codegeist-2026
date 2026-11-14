@@ -15,6 +15,9 @@ import { parseTwgDependents } from '../risk/cql';
 //   forge variables set TWG_BLAST_RADIUS_QUERY_KEY "<queryKey from TWG registration>"
 const TWG_ENDPOINT = '/gateway/api/graphql/twg';
 const TWG_QUERY_KEY = process.env.TWG_BLAST_RADIUS_QUERY_KEY || '';
+const SITE_APP_URL = process.env.FAULTLINE_SITE_APP_URL || '';
+const SITE_APP_TOKEN = process.env.FAULTLINE_ENDPOINT_TOKEN || '';
+const USER_ARI = process.env.FAULTLINE_TWG_USER_ARI || 'ari:cloud:identity::user/60167ab98fb6ea014a9e529e';
 
 // ---------------------------------------------------------------------------
 // 1. Postmortem evidence (Confluence) — via the companion site app
@@ -78,34 +81,32 @@ const unavailable = (reason) => ({ status: 'unavailable', reason, dependents: []
  * is unavailable; the engine and tests already support it.
  */
 export async function fetchDependentServices({ workspace, repo }) {
-  if (!TWG_QUERY_KEY) return unavailable('TWG query key not configured');
+  const TWG_BRIDGE_URL = process.env.FAULTLINE_TWG_BRIDGE_URL || '';
+  if (!TWG_BRIDGE_URL || !TWG_QUERY_KEY) {
+    return unavailable('TWG bridge not configured (FAULTLINE_TWG_BRIDGE_URL or TWG_BLAST_RADIUS_QUERY_KEY)');
+  }
 
+  // Route through the companion site app (same bridge pattern as the postmortem
+  // search): the main app cannot reach the site's TWG GraphQL endpoint directly
+  // because of the workspace/site scope separation.
   try {
-    const res = await api.asApp().requestGraph(route`${TWG_ENDPOINT}`, {
+    const res = await fetch(TWG_BRIDGE_URL, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        query: `query BlastRadius($queryKey: String!, $params: JSON!) {
-          customQuery(queryKey: $queryKey, params: $params) {
-            results
-          }
-        }`,
-        variables: {
-          queryKey: TWG_QUERY_KEY,
-          params: { repoUrl: `https://bitbucket.org/${workspace}/${repo}` },
-        },
-      }),
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${SITE_APP_TOKEN}`,
+      },
+      body: JSON.stringify({ userAri: USER_ARI }),
     });
-    if (!res.ok) return unavailable(`TWG responded ${res.status}`);
-
-    const json = await res.json();
-    const dependents = parseTwgDependents(json);
-    if (dependents === null) {
-      return unavailable('TWG result shape not recognized — check the registered traversal');
+    if (!res.ok) {
+      return unavailable(`TWG bridge responded ${res.status}`);
     }
-    return { status: 'ok', reason: null, dependents, sourceUrl: null };
+    const json = await res.json();
+    if (json?.status === 'ok' && Array.isArray(json?.dependents)) {
+      return { status: 'ok', reason: null, dependents: json.dependents, sourceUrl: null };
+    }
+    return unavailable(json?.reason || 'TWG bridge returned unrecognized envelope');
   } catch (e) {
-    console.warn(`TWG blast-radius lookup failed: ${e?.message || e}`);
-    return unavailable(String(e?.message || e));
+    return unavailable(`TWG bridge unreachable: ${String(e?.message || e)}`);
   }
 }

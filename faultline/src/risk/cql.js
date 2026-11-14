@@ -51,15 +51,28 @@ function mapConfluenceResults(json, siteUrl) {
 
 /**
  * Parse a Teamwork Graph customQuery response into a list of dependent
- * service names. Defensive by design: accepts a string array, or an array
- * of objects carrying name/title fields. Returns null when the shape is
- * unrecognizable (caller treats null as unavailable, not as zero dependents).
+ * service names. Defensive by design: accepts a string array, an array of
+ * objects carrying name/title fields, OR the TWG edge format (edges → item → data).
+ * Returns null when the shape is unrecognizable (caller treats null as
+ * unavailable, not as zero dependents).
  */
 function parseTwgDependents(json) {
   const raw = json?.data?.customQuery?.results;
   if (!Array.isArray(raw)) return null;
   const names = raw
-    .map((r) => (typeof r === 'string' ? r : r?.name || r?.title || null))
+    .map((r) => {
+      if (typeof r === 'string') return r;
+      // Direct object with name/title
+      if (r?.name || r?.title) return r.name || r.title;
+      // TWG edge format: { item: { data: { key, summary } } }
+      if (r?.item?.data) return r.item.data.key || r.item.data.summary || null;
+      // Nested edge format
+      if (r?.edges && Array.isArray(r.edges)) {
+        const first = r.edges[0];
+        return first?.item?.data?.key || first?.item?.data?.summary || null;
+      }
+      return null;
+    })
     .filter(Boolean);
   return names.length > 0 ? names : null;
 }

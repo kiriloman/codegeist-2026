@@ -1,4 +1,6 @@
-# Faultline Companion (site app) — schema-verified against CLI 15.x conventions.
+# Faultline Companion (site app) — carries ALL site-classified scopes the main
+# (Bitbucket workspace) app cannot: search:confluence for postmortems, read:graph:*
+# for the Teamwork Graph blast-radius traversal.
 
 app:
   id: ari:cloud:ecosystem::app/d2b59f0b-4c0d-4565-8826-7f4d0adbc868
@@ -9,14 +11,19 @@ modules:
   webtrigger:
     - key: postmortem-search-trigger
       function: postmortem-search
-      # The main (Bitbucket) app calls this with the shared bearer token.
+    - key: twg-blast-radius-trigger
+      function: twg-blast-radius
 
   function:
     - key: postmortem-search
       handler: resolvers/index.runPostmortemSearch
+    - key: twg-blast-radius
+      handler: resolvers/index.runTwgBlastRadius
 
 resources: []
 
 permissions:
   scopes:
-    - search:confluence # site-classified — legal here because this app has NO Bitbucket scopes
+    - search:confluence
+    - read:graph:user:atlassian
+    - read:graph:issue:jira
