@@ -78,7 +78,7 @@ function scoreFile(file, history = {}) {
   // signals outrank any single heuristic — the invariant the guide legend states.
   const deps = history.dependents?.length || 0;
   if (deps > 0) {
-    const inferred = history.dependentsProvenance !== 'graph'; // graph > inferred, half weight
+    const inferred = history.dependentsProvenance !== 'graph'; // TWG graph > Jira/inferred, half weight for non-graph sources
     let w = deps >= 5 ? 32 : deps >= 3 ? 20 : 10;
     if (inferred) w = Math.round(w / 2);
     score += w;

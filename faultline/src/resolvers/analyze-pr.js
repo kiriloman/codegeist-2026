@@ -118,7 +118,7 @@ export async function analyzePullRequest({ workspace, repo, prId, title, author 
   const capped = files.slice(0, 25);
   const [postmortems, blast, touchList] = await Promise.all([
     fetchPostmortemCounts(files.map((f) => f.path)),
-    fetchDependentServices({ workspace, repo }),
+    fetchDependentServices({ workspace, repo, title }),
     mapChunked(capped, 6, (f) =>
       fetchFileTouchCount(workspace, repo, f.path).catch(() => ({ touchCount: 0 }))
     ),
@@ -134,7 +134,7 @@ export async function analyzePullRequest({ workspace, repo, prId, title, author 
       ...(isCode && blast.status === 'ok' && blast.dependents.length > 0
         ? {
             dependents: blast.dependents,
-            dependentsProvenance: 'graph',
+            dependentsProvenance: 'jira',
             dependentsSourceUrl: blast.sourceUrl,
           }
         : {}),

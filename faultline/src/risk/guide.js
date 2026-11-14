@@ -115,7 +115,7 @@ function renderGuide(pr, ranked, meta = {}) {
   }
 
   L.push('---');
-  L.push('*Signals, in order of trust: **① postmortem references** (Confluence evidence, linked above) · **② service dependencies** (Teamwork Graph) · **③ heuristics** (path patterns, change size, commit churn, test-delta). The top evidence signal outweighs any single heuristic; stacked heuristics can still rank a file high — which is why every reason above is labeled and its evidence linked. Rankings are deterministic — no AI guessing. **A ranking is a starting point, not a verdict — never skip a file because of it.***');
+  L.push('*Signals, in order of trust: **① postmortem references** (Confluence evidence, linked above) · **② related Jira work items** (blast-radius search) · **③ heuristics** (path patterns, change size, commit churn, test-delta). The top evidence signal outweighs any single heuristic; stacked heuristics can still rank a file high — which is why every reason above is labeled and its evidence linked. Rankings are deterministic — no AI guessing. **A ranking is a starting point, not a verdict — never skip a file because of it.***');
   L.push('');
   L.push(`💬 **Ask me anything about this PR in Rovo chat** — I answer with links and data, not vibes.`);
   return L.join('\n');

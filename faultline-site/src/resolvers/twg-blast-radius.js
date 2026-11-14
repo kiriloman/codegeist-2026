@@ -1,65 +1,68 @@
-// Faultline Companion — TWG blast-radius endpoint.
-// Executes the registered persisted Cypher traversal via the Teamwork Graph
-// GraphQL API. This runs in the SITE app (installed on Jira/Confluence) because
-// the main (Bitbucket workspace) app cannot reach the site's TWG endpoint —
-// same workspace/site scope wall as the Confluence search.
+// Faultline Companion — blast-radius endpoint via Jira REST API.
+// TWG requires user context (not available in webtriggers), so we query Jira
+// directly via `api.asApp().requestJira()` — a fully supported first-class
+// Forge API that works from unattended contexts.
+//
+// The "blast radius" = Jira work items that reference the same service/area
+// as the PR being analyzed. For the demo, these are the checkout-service
+// incidents we seeded.
 //
 // Contract (shared with the main app):
-//   POST { userAri: string } + Authorization: Bearer <FAULTLINE_ENDPOINT_TOKEN>
+//   POST { searchText: string } + Authorization: Bearer <FAULTLINE_ENDPOINT_TOKEN>
 //   → 200 { status: 'ok'|'unavailable', reason, dependents: string[] }
 
 import api, { route } from '@forge/api';
-import { parseTwgDependents } from '../risk/cql';
 import { parseBody, isAuthorized, jsonResponse } from './webtrigger-utils';
-
-const TWG_ENDPOINT = '/gateway/api/graphql/twg';
-const TWG_QUERY_KEY = process.env.TWG_BLAST_RADIUS_QUERY_KEY || '';
 
 export async function runTwgBlastRadius(req) {
   if (!isAuthorized(req)) {
     return jsonResponse({ ok: false, reason: 'unauthorized' }, 401);
   }
 
-  if (!TWG_QUERY_KEY) {
-    return jsonResponse({ status: 'unavailable', reason: 'TWG query key not configured', dependents: [] });
-  }
-
   const body = parseBody(req);
-  const userAri = body?.userAri;
-  if (!userAri || typeof userAri !== 'string') {
-    return jsonResponse({ status: 'unavailable', reason: 'missing userAri parameter', dependents: [] });
+  const searchText = body?.searchText || body?.userAri || '';
+  if (!searchText || typeof searchText !== 'string') {
+    return jsonResponse({ status: 'unavailable', reason: 'missing searchText parameter', dependents: [] });
   }
 
   try {
-    // requestTeamworkGraph is ONLY on api.asUser(), not api.asApp() — TWG
-    // queries require user context (the user's graph traversal permissions).
-    // For this webtrigger (unattended), we use the site admin's account ID.
-    const SITE_ADMIN_ID = process.env.FAULTLINE_TWG_USER_ID || '60167ab98fb6ea014a9e529e';
-    const res = await api.asUser(SITE_ADMIN_ID).requestTeamworkGraph(
-      `query BlastRadius($queryKey: String!, $params: JSON!) {
-        customQuery(queryKey: $queryKey, params: $params) {
-          results
-        }
-      }`,
-      {
-        queryKey: TWG_QUERY_KEY,
-        params: { userAri },
-      }
-    );
+    // Search Jira for issues whose summary or description mentions the service area.
+    // Uses the POST /rest/api/3/search/jql endpoint (the old GET /rest/api/3/search
+    // is deprecated and returns 410).
+    const res = await api
+      .asApp()
+      .requestJira(route`/rest/api/3/search/jql`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          jql: `summary ~ "${searchText}" OR description ~ "${searchText}" ORDER BY created DESC`,
+          maxResults: 10,
+          fields: ['summary', 'status'],
+        }),
+      });
 
     if (!res.ok) {
-      return jsonResponse({ status: 'unavailable', reason: `TWG responded ${res.status}`, dependents: [] });
+      return jsonResponse({ status: 'unavailable', reason: `Jira responded ${res.status}`, dependents: [] });
     }
 
     const json = await res.json();
-    console.log('TWG raw response:', JSON.stringify(json).slice(0, 500));
-    const dependents = parseTwgDependents(json);
-    if (dependents === null) {
-      return jsonResponse({ status: 'unavailable', reason: 'TWG result shape not recognized', dependents: [] });
+    const issues = json?.issues || [];
+
+    // Map Jira issues to dependent "service" names (issue key + summary).
+    const dependents = issues.map((issue) => {
+      const key = issue?.key || '';
+      const summary = issue?.fields?.summary || '';
+      const status = issue?.fields?.status?.name || '';
+      return `${key}: ${summary} (${status})`;
+    });
+
+    if (dependents.length === 0) {
+      return jsonResponse({ status: 'ok', reason: null, dependents: [] });
     }
+
     return jsonResponse({ status: 'ok', reason: null, dependents });
   } catch (e) {
-    console.warn(`TWG blast-radius failed: ${e?.message || e}`);
+    console.warn(`Jira blast-radius failed: ${e?.message || e}`);
     return jsonResponse({ status: 'unavailable', reason: String(e?.message || e), dependents: [] });
   }
 }
