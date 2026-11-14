@@ -12,7 +12,7 @@ dependency order; each phase gates the next.
 cd /Users/kyryloyefimenko/workspace/hackathons/codegeist-2026/faultline
 git init
 git add README.md LICENSE .gitignore manifest.yml package.json src tests
-git commit -m "Faultline v1.3: evidence-first PR risk ranking (Forge, Rovo, MCP, TWG)"
+git commit -m "Faultline: evidence-first PR risk ranking (Forge, Rovo, MCP)"
 # Create a GitHub repo (private is fine for now; public before submitting) and push:
 git remote add origin git@github.com:<you>/faultline.git
 git push -u origin main
@@ -67,7 +67,7 @@ git push -u origin main
 
 ## PHASE 3 — Turn on the Jira blast-radius (bonus track)
 
-1. Register a persisted Cypher traversal mapping a Bitbucket repo URL → dependent services (follow the Jira blast-radius "persisted Cypher queries" guide in the Atlassian docs; the app sends `{ repoUrl }` and expects a list of service names — see `(removed)` in `src/risk/cql.js`).
+1. (Blast-radius is served by the companion app's Jira REST search — no registration needed.)
 2. ```bash
    # (blast radius uses Jira REST via companion app — no registration needed)
    ```
@@ -95,7 +95,7 @@ git push -u origin main
 
 **Which category would you like to submit to?** Productivity Tools (main) — bonus tracks: Best Rovo Agents, Best App with Atlassian MCP, Best Jira blast-radius integration.
 
-**What it does:** When a PR opens, Faultline analyzes every changed file and posts ONE deterministic review guide: a ranked table (risk score, tier, labeled reasons), linked evidence (the actual Confluence postmortems that referenced the file, dependent services from the Jira blast-radius), a suggested review path, and a trust legend. Reviewers @mention the Faultline Rovo agent in chat and get answers with citations — never vibes. The same data is exposed as an MCP server for Claude/Cursor. The guide edits itself (idempotently) when the PR updates. Evidence lookups that fail say so explicitly — a fetch failure never masquerades as "no incident history."
+**What it does:** When a PR opens, Faultline analyzes every changed file and posts ONE deterministic review guide: a ranked table (risk score, tier, labeled reasons), linked evidence (the actual Confluence postmortems that referenced the file, related Jira work items), a suggested review path, and a trust legend. Reviewers @mention the Faultline Rovo agent in chat and get answers with citations — never vibes. The same data is exposed as an MCP server for Claude/Cursor. The guide edits itself (idempotently) when the PR updates. Evidence lookups that fail say so explicitly — a fetch failure never masquerades as "no incident history."
 
 **How we built it:** A two-app Forge architecture: the main app (Bitbucket workspace) handles the webhook → diffstat → deterministic ranking → idempotent PR-comment loop; a companion site app (Jira site) carries the Confluence CQL postmortem search that Forge's workspace/site scope separation forbids mixing into one app, exposed to the main app as an authenticated endpoint. The native `rovo:mcp` module shares the agent's four action tools. Jira REST API search powers the blast-radius tier. The scoring engine is pure, deterministic, and unit-tested — 29 tests pin the evidence hierarchy, the honest edge cases, and the fail-closed auth.
 
