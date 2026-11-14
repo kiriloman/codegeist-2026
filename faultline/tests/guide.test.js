@@ -83,3 +83,24 @@ test('digest carries PR link, scores, evidence URLs, and warnings for the chat a
   const d2 = renderChatDigest(pr, ranked, { postmortemsStatus: 'unavailable', blastStatus: 'unavailable' });
   assert.ok(d2.includes('Warnings:'), 'unavailable states surface in the digest');
 });
+
+test('live postmortem failures (companion site app errors) render the ⚠️ warning, NOT the quiet footnote', () => {
+  // The R6 Graph reviewer caught this: real failure reasons from fetchPostmortemCounts
+  // all contain "companion site app" — the old regex matched them as "not configured"
+  // (quiet footnote) instead of the prominent warning. This test pins the fix.
+  const realReasons = [
+    'companion site app responded 403',
+    'companion site app unreachable: timeout',
+    'companion site app returned an unrecognized envelope',
+  ];
+  for (const reason of realReasons) {
+    const g = renderGuide(pr, ranked, { postmortemsStatus: 'unavailable', postmortemsReason: reason });
+    assert.ok(g.includes('**Postmortem evidence unavailable**'), `live failure "${reason}" must show ⚠️ warning`);
+    assert.ok(!g.includes('layer not configured'), `live failure "${reason}" must NOT be quiet footnote`);
+    assert.ok(g.includes('NOT an absence of incident history'), `live failure "${reason}" must say NOT absence`);
+  }
+  // And the actual "not configured" reason still gets the quiet footnote
+  const g2 = renderGuide(pr, ranked, { postmortemsStatus: 'unavailable', postmortemsReason: 'companion site app URL not configured' });
+  assert.ok(g2.includes('layer not configured'), 'not configured still gets quiet footnote');
+  assert.ok(!g2.includes('**Postmortem evidence unavailable**'), 'not configured does NOT get warning');
+});

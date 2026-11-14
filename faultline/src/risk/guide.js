@@ -41,7 +41,7 @@ function renderGuide(pr, ranked, meta = {}) {
   // Distinguish permanent states (layer not configured — quiet footnote) from
   // live failures (layer configured but erroring — prominent warning), so the
   // warnings never become noise on every PR.
-  const permanentPostmortem = /not configured|companion site app/i.test(meta.postmortemsReason || '');
+  const permanentPostmortem = /not configured/i.test(meta.postmortemsReason || '');
   if (meta.postmortemsStatus === 'unavailable') {
     if (permanentPostmortem) {
       L.push(`> ℹ️ Postmortem evidence layer not configured (${meta.postmortemsReason}) — rankings use heuristics only. This is a setup state, not an absence of incident history.`);

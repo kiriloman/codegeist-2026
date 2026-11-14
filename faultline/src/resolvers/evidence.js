@@ -17,7 +17,7 @@ const TWG_ENDPOINT = '/gateway/api/graphql/twg';
 const TWG_QUERY_KEY = process.env.TWG_BLAST_RADIUS_QUERY_KEY || '';
 const SITE_APP_URL = process.env.FAULTLINE_SITE_APP_URL || '';
 const SITE_APP_TOKEN = process.env.FAULTLINE_ENDPOINT_TOKEN || '';
-const USER_ARI = process.env.FAULTLINE_TWG_USER_ARI || 'ari:cloud:identity::user/60167ab98fb6ea014a9e529e';
+const USER_ARI = process.env.FAULTLINE_TWG_USER_ARI || '';
 
 // ---------------------------------------------------------------------------
 // 1. Postmortem evidence (Confluence) — via the companion site app
@@ -92,12 +92,18 @@ export async function fetchDependentServices({ workspace, repo, title }) {
     // The full title is too long for Jira's text search (all words must match),
     // so we pick the most distinctive short keyword. For the demo, "checkout"
     // or "retry" matches the seeded incident tickets.
-    const keywords = (title || '')
+    // Extract the most distinctive keyword from the PR title for the Jira search.
+    // Principled approach: pick the longest non-stopword word (longer words are
+    // more specific; generic English stopwords excluded).
+    const STOPWORDS = new Set(['about', 'above', 'after', 'again', 'their', 'there', 'these', 'those', 'through', 'under', 'until', 'when', 'where', 'which', 'while', 'with', 'would', 'your', 'from', 'have', 'this', 'that', 'they', 'been', 'were', 'will', 'into', 'more', 'other', 'some', 'such', 'than', 'them', 'then', 'over', 'also', 'back', 'just', 'make', 'many', 'much', 'must', 'only', 'same', 'take', 'well', 'what', 'whose', 'along']);
+    const words = (title || '')
       .toLowerCase()
       .replace(/[^a-z0-9\s]/g, ' ')
       .split(/\s+/)
-      .filter((w) => w.length > 4 && !['about', 'service', 'token', 'audit', 'trail', 'logic', 'revocation'].includes(w));
-    const searchText = keywords[0] || title || repo || '';
+      .filter((w) => w.length > 4 && !STOPWORDS.has(w));
+    // Sort by length descending — the longest word is most likely the service name
+    words.sort((a, b) => b.length - a.length);
+    const searchText = words[0] || '';
     const res = await fetch(TWG_BRIDGE_URL, {
       method: 'POST',
       headers: {
