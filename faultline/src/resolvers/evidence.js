@@ -1,7 +1,7 @@
 // Faultline — evidence fetchers.
 // These are the signals that make Faultline NOT a generic LLM reviewer:
 //   1. Postmortem references  — Confluence CQL search (stable public API)
-//   2. Blast radius           — Jira REST via companion site app
+//   2. Related Jira work items — Jira REST via companion site app
 //
 // RULES: evidence fetchers never break the analysis, and failures are NEVER
 // silent — both fetchers return a status ('ok' | 'unavailable' + reason) that
@@ -10,24 +10,49 @@
 
 import api, { route } from '@forge/api';
 
-// Persisted Cypher query key registered for the blast-radius traversal — set via:
-//   forge variables set FAULTLINE_JIRA_BRIDGE_KEY "<any value to enable the layer>"
+// Companion app bridge URLs — set via:
+//   forge variables set FAULTLINE_SITE_APP_URL "<postmortem-search-trigger URL>"
+//   forge variables set FAULTLINE_JIRA_BRIDGE_URL "<jira-blast-radius-trigger URL>"
+//   forge variables set FAULTLINE_JIRA_BRIDGE_KEY "enable"  (any non-empty value)
+//   forge variables set FAULTLINE_ENDPOINT_TOKEN "<shared bearer token>"
 const JIRA_BRIDGE_KEY = process.env.FAULTLINE_JIRA_BRIDGE_KEY || '';
 const SITE_APP_URL = process.env.FAULTLINE_SITE_APP_URL || '';
+const JIRA_BRIDGE_URL = process.env.FAULTLINE_JIRA_BRIDGE_URL || '';
 const SITE_APP_TOKEN = process.env.FAULTLINE_ENDPOINT_TOKEN || '';
+
+// Generic English stopwords for keyword extraction.
+const STOPWORDS = new Set([
+  'about', 'above', 'after', 'again', 'their', 'there', 'these', 'those',
+  'through', 'under', 'until', 'when', 'where', 'which', 'while', 'with',
+  'would', 'your', 'from', 'have', 'this', 'that', 'they', 'been', 'were',
+  'will', 'into', 'more', 'other', 'some', 'such', 'than', 'them', 'then',
+  'over', 'also', 'back', 'just', 'make', 'many', 'much', 'must', 'only',
+  'same', 'take', 'well', 'what', 'whose', 'along', 'service', 'token',
+  'audit', 'trail', 'logic', 'revocation',
+]);
+
+/** Extract the most distinctive keyword from a PR title for Jira search. */
+function extractSearchKeyword(title) {
+  const words = (title || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .split(/\s+/)
+    .filter((w) => w.length > 4 && !STOPWORDS.has(w));
+  words.sort((a, b) => b.length - a.length);
+  return words[0] || '';
+}
 
 // ---------------------------------------------------------------------------
 // 1. Postmortem evidence (Confluence) — via the companion site app
 // ---------------------------------------------------------------------------
 
-// The companion site app (faultline-site) carries the site-classified
-// search:confluence scope that this workspace app cannot mix with its
-// Bitbucket scopes. It exposes an authenticated POST endpoint returning the
-// same status envelope. Egress to it is allowlisted in the manifest
-// (permissions.external.fetch.backend). When unconfigured or unreachable,
-// the layer reports 'unavailable' with the reason — honestly, never as
-// "no incident history".
-
+/**
+ * Count postmortem pages referencing each changed file path.
+ * The companion site app (faultline-site) carries the site-classified
+ * search:confluence scope that this workspace app cannot mix with its
+ * Bitbucket scopes. Failures return 'unavailable' with the reason —
+ * honestly, never as "no incident history".
+ */
 export async function fetchPostmortemCounts(paths, cap = 15) {
   const list = (paths || []).slice(0, cap);
   if (list.length === 0) return { status: 'ok', reason: null, byPath: {} };
@@ -61,46 +86,28 @@ export async function fetchPostmortemCounts(paths, cap = 15) {
 }
 
 // ---------------------------------------------------------------------------
-// 2. Blast radius (Jira work items)
+// 2. Related Jira work items (blast radius)
 // ---------------------------------------------------------------------------
 
 const unavailable = (reason) => ({ status: 'unavailable', reason, dependents: [], sourceUrl: null });
 
 /**
  * Related Jira work items matching this PR's service area.
- * Uses a persisted Cypher traversal registered at setup time (customQuery root
- * field).
- * an unrecognizable shape reports 'unavailable', never zero-dependents.
- * NOTE: the `inferred` provenance tier in the engine is reserved for a
- * Compass-derived fallback (repo activity heuristics) if the graph traversal
- * is unavailable; the engine and tests already support it.
+ * Runs a title-keyword search against Jira via the companion site app's
+ * authenticated bridge. Results are labeled 'jira' provenance and scored
+ * at half weight (max 16 — deliberately below the strongest heuristic).
  */
 export async function fetchDependentServices({ workspace, repo, title }) {
-  const JIRA_BRIDGE_URL = process.env.FAULTLINE_JIRA_BRIDGE_URL || '';
   if (!JIRA_BRIDGE_URL || !JIRA_BRIDGE_KEY) {
     return unavailable('Jira bridge not configured (FAULTLINE_JIRA_BRIDGE_URL or FAULTLINE_JIRA_BRIDGE_KEY)');
   }
 
-  // Route through the companion site app (same bridge pattern as the postmortem
-  // search): the main app routes through the companion site app's Jira REST bridge
-  // because of the workspace/site scope separation.
+  const searchText = extractSearchKeyword(title);
+  if (!searchText) {
+    return unavailable('no distinctive keyword found in PR title for Jira search');
+  }
+
   try {
-    // Extract a service keyword from the PR title for the Jira search.
-    // The full title is too long for Jira's text search (all words must match),
-    // so we pick the most distinctive short keyword. For the demo, "checkout"
-    // or "retry" matches the seeded incident tickets.
-    // Extract the most distinctive keyword from the PR title for the Jira search.
-    // Principled approach: pick the longest non-stopword word (longer words are
-    // more specific; generic English stopwords excluded).
-    const STOPWORDS = new Set(['about', 'above', 'after', 'again', 'their', 'there', 'these', 'those', 'through', 'under', 'until', 'when', 'where', 'which', 'while', 'with', 'would', 'your', 'from', 'have', 'this', 'that', 'they', 'been', 'were', 'will', 'into', 'more', 'other', 'some', 'such', 'than', 'them', 'then', 'over', 'also', 'back', 'just', 'make', 'many', 'much', 'must', 'only', 'same', 'take', 'well', 'what', 'whose', 'along']);
-    const words = (title || '')
-      .toLowerCase()
-      .replace(/[^a-z0-9\s]/g, ' ')
-      .split(/\s+/)
-      .filter((w) => w.length > 4 && !STOPWORDS.has(w));
-    // Sort by length descending — the longest word is most likely the service name
-    words.sort((a, b) => b.length - a.length);
-    const searchText = words[0] || '';
     const res = await fetch(JIRA_BRIDGE_URL, {
       method: 'POST',
       headers: {

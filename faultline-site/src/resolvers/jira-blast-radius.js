@@ -1,7 +1,6 @@
 // Faultline Companion — blast-radius endpoint via Jira REST API.
-// We query Jira REST because Teamwork Graph requires user-context impersonation
-// scopes not yet supported for Forge webtriggers. See src/risk/cql.js for the
-// tested TWG response parser, ready to wire when the platform adds support.
+// We query Jira REST because it works reliably from unattended webtrigger
+// contexts. The search is a title-keyword match against Jira issues.
 // directly via `api.asApp().requestJira()` — a fully supported first-class
 // Forge API that works from unattended contexts.
 //
