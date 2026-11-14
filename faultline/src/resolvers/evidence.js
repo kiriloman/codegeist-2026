@@ -1,7 +1,7 @@
 // Faultline — evidence fetchers.
 // These are the signals that make Faultline NOT a generic LLM reviewer:
 //   1. Postmortem references  — Confluence CQL search (stable public API)
-//   2. Blast radius           — Teamwork Graph (per-site GraphQL, Preview Oct 2026)
+//   2. Blast radius           — Jira REST via companion site app
 //
 // RULES: evidence fetchers never break the analysis, and failures are NEVER
 // silent — both fetchers return a status ('ok' | 'unavailable' + reason) that
@@ -11,8 +11,8 @@
 import api, { route } from '@forge/api';
 
 // Persisted Cypher query key registered for the blast-radius traversal — set via:
-//   forge variables set FAULTLINE_JIRA_BRIDGE_KEY "<queryKey from TWG registration>"
-const JIRA_QUERY_KEY = process.env.FAULTLINE_JIRA_BRIDGE_KEY || '';
+//   forge variables set FAULTLINE_JIRA_BRIDGE_KEY "<any value to enable the layer>"
+const JIRA_BRIDGE_KEY = process.env.FAULTLINE_JIRA_BRIDGE_KEY || '';
 const SITE_APP_URL = process.env.FAULTLINE_SITE_APP_URL || '';
 const SITE_APP_TOKEN = process.env.FAULTLINE_ENDPOINT_TOKEN || '';
 
@@ -67,22 +67,22 @@ export async function fetchPostmortemCounts(paths, cap = 15) {
 const unavailable = (reason) => ({ status: 'unavailable', reason, dependents: [], sourceUrl: null });
 
 /**
- * Services that depend on the code in this repository, via the Teamwork Graph.
+ * Related Jira work items matching this PR's service area.
  * Uses a persisted Cypher traversal registered at setup time (customQuery root
- * field). The graph result shape is parsed defensively (see parseTwgDependents);
+ * field).
  * an unrecognizable shape reports 'unavailable', never zero-dependents.
  * NOTE: the `inferred` provenance tier in the engine is reserved for a
  * Compass-derived fallback (repo activity heuristics) if the graph traversal
  * is unavailable; the engine and tests already support it.
  */
 export async function fetchDependentServices({ workspace, repo, title }) {
-  const TWG_BRIDGE_URL = process.env.FAULTLINE_TWG_BRIDGE_URL || '';
-  if (!TWG_BRIDGE_URL || !JIRA_QUERY_KEY) {
-    return unavailable('Jira bridge not configured (FAULTLINE_TWG_BRIDGE_URL or FAULTLINE_JIRA_BRIDGE_KEY)');
+  const JIRA_BRIDGE_URL = process.env.FAULTLINE_JIRA_BRIDGE_URL || '';
+  if (!JIRA_BRIDGE_URL || !JIRA_BRIDGE_KEY) {
+    return unavailable('Jira bridge not configured (FAULTLINE_JIRA_BRIDGE_URL or FAULTLINE_JIRA_BRIDGE_KEY)');
   }
 
   // Route through the companion site app (same bridge pattern as the postmortem
-  // search): the main app cannot reach the site's TWG GraphQL endpoint directly
+  // search): the main app routes through the companion site app's Jira REST bridge
   // because of the workspace/site scope separation.
   try {
     // Extract a service keyword from the PR title for the Jira search.
@@ -101,7 +101,7 @@ export async function fetchDependentServices({ workspace, repo, title }) {
     // Sort by length descending — the longest word is most likely the service name
     words.sort((a, b) => b.length - a.length);
     const searchText = words[0] || '';
-    const res = await fetch(TWG_BRIDGE_URL, {
+    const res = await fetch(JIRA_BRIDGE_URL, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

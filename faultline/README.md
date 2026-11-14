@@ -2,7 +2,7 @@
 
 **Codegeist 2026 entry.** An assignable Rovo agent that defends the reviewer's attention on every pull request.
 
-> **Deployment status (verified):** Deployed to Forge development and production environments, installed on `bitbucket.org/faultline` and on `faultline1.atlassian.net` (Jira + Confluence). **Working end-to-end:** a real pull request receives the full Review Guide comment — ranked table, risk scores, labeled reasons, **cited Confluence postmortem link**, and **related Jira work items** (blast-radius). Updates idempotently on re-pushes. Fail-closed bearer auth on all webtriggers. 30 unit tests pass. Demo video: pending.
+> **Deployment status (verified):** Deployed to Forge development and production environments, installed on `bitbucket.org/faultline` and on `faultline1.atlassian.net` (Jira + Confluence). **Working end-to-end:** a real pull request receives the full Review Guide comment — ranked table, risk scores, labeled reasons, **cited Confluence postmortem link**, and **related Jira work items** (blast-radius). Updates idempotently on re-pushes. Fail-closed bearer auth on all webtriggers. 29 unit tests pass. Demo video: pending.
 
 ## What it does (the 30-second version)
 
@@ -14,7 +14,7 @@
 4. Reviewers **@mention Faultline in Rovo chat**: "why is retry.js risky?" → it answers **with citations** (postmortem links, scores, evidence), never vibes.
 5. The same four tools are exposed via Atlassian's native `rovo:mcp` server module — the "Best App with Atlassian MCP" bonus track.
 
-**Why this is NOT a generic LLM reviewer (the differentiation):** the LLM never reads or reviews code. The guide is 100% deterministic — it cannot hallucinate — and its top signals are things no external AI reviewer can access: your postmortem history and your Jira blast-radius dependencies. Generic reviewers (CodeRabbit, Copilot review) comment on code content; Faultline ranks where a *human's* attention matters, backed by your org's own incident evidence. This is precisely the winning TWG pattern the Codegeist track describes ("mapping hidden dependencies across teams, Compass microservices, and past incidents to predict release risks").
+**Why this is NOT a generic LLM reviewer (the differentiation):** the LLM never reads or reviews code. The guide is 100% deterministic — it cannot hallucinate — and its top signals are things no external AI reviewer can access: your postmortem history and your Jira blast-radius dependencies. Generic reviewers (CodeRabbit, Copilot review) comment on code content; Faultline ranks where a *human's* attention matters, backed by your org's own incident evidence. This is precisely the winning Jira blast-radius pattern the Codegeist track describes ("mapping hidden dependencies across teams, Compass microservices, and past incidents to predict release risks").
 
 **Design principle (the "outstanding" part):** the guide is 100% deterministic — no LLM in the output path, so it cannot hallucinate. The LLM only powers the chat Q&A, and its system prompt forbids stating anything not present in the stored analysis. Rankings are advisory: the agent explicitly never tells a reviewer to skip a file.
 
@@ -52,10 +52,10 @@ Then wire the webhook:
 
 Then enable the evidence layer (both optional — the app works on heuristics alone if unset):
 ```bash
-forge variables set SITE_URL "https://faultline1.atlassian.net"   # for postmortem links
-# (TWG path exists for future platform support) "<queryKey>"         # blast-radius traversal (see below)
-forge variables set FAULTLINE_ENDPOINT_TOKEN "<long-random-secret>"  # Bearer auth for both webtriggers (REQUIRED in production)
-forge variables set FAULTLINE_GUIDE_FORMAT "list"                 # OPTIONAL: table-free guide rendering
+forge variables set FAULTLINE_SITE_APP_URL "<postmortem-search-trigger URL>"  # companion app endpoint (REQUIRED for postmortem evidence)
+forge variables set FAULTLINE_JIRA_BRIDGE_URL "<jira-blast-radius-trigger URL>"  # companion app endpoint (REQUIRED for blast-radius)
+forge variables set FAULTLINE_JIRA_BRIDGE_KEY "enable"  # any non-empty value enables the layer
+forge variables set FAULTLINE_ENDPOINT_TOKEN "<long-random-secret>"  # shared bearer token for both apps
 ```
 **Endpoint auth (fail-closed):** when `FAULTLINE_ENDPOINT_TOKEN` is set, the webhook requires `Authorization: Bearer <token>`. When it is NOT set, endpoints **reject all requests** unless the explicit dev bypass is configured (webhook only) (`forge variables set FAULTLINE_ALLOW_UNAUTHENTICATED 1`) — use that only for `forge tunnel` testing. MCP clients send the header in their endpoint configuration.
 
@@ -67,7 +67,7 @@ forge variables set FAULTLINE_GUIDE_FORMAT "list"                 # OPTIONAL: ta
 - [ ] Create 2–3 Confluence pages with label `postmortem` (e.g., "Checkout outage 2026-03-14") whose body references the demo file paths (`src/payments/retry.js`, …)
 - [ ] Demo repo needs real commit history on the files you'll touch (churn signal)
 - [ ] Open a PR touching a payment/auth file with NO test changes (drives test-delta + evidence tiers)
-- [ ] Register the TWG traversal and set the query key so blast radius shows `graph` provenance, not `unavailable`
+- [ ] Register the Jira blast-radius traversal and set the query key so blast radius shows `graph` provenance, not `unavailable`
 
 **Blast-radius:** served by the companion site app's Jira REST search for related work items. No additional setup needed.
 
@@ -77,7 +77,7 @@ forge variables set FAULTLINE_GUIDE_FORMAT "list"                 # OPTIONAL: ta
 ```bash
 node --test tests/engine.test.js tests/guide.test.js tests/cql.test.js
 ```
-30 tests cover the critical properties: the evidence hierarchy (both evidence maxima outweigh every single heuristic — derived from the real weight constants, not literals; +24 for 2 postmortems; graph provenance counts double vs inferred), segment matching with zero substring false positives ("author" never matches auth, "discharge" never matches charge), tier boundaries, score capping, fallback citations, the honestly-documented stacked-heuristics edge case, CQL construction and escaping, TWG shape parsing (unrecognizable → unavailable, never zero), table/list guide formats, evidence-unavailability rendering, cap disclosure, fail-closed auth, and safe body parsing.
+29 tests cover the critical properties: the evidence hierarchy (both evidence maxima outweigh every single heuristic — derived from the real weight constants, not literals; +24 for 2 postmortems; graph provenance counts double vs inferred), segment matching with zero substring false positives ("author" never matches auth, "discharge" never matches charge), tier boundaries, score capping, fallback citations, the honestly-documented stacked-heuristics edge case, CQL construction and escaping, Jira blast-radius shape parsing (unrecognizable → unavailable, never zero), table/list guide formats, evidence-unavailability rendering, cap disclosure, fail-closed auth, and safe body parsing.
 
 ## ✅ Deployment-verified platform facts (deploy-learned, not doc-guessed)
 

@@ -154,5 +154,4 @@ permissions:
     # comment). Consequence: the Confluence postmortem layer degrades honestly
     # to "evidence unavailable (search responded 403)" — it renders in the guide
     # as a fetch failure, never as "no incident history".
-  # Teamwork Graph (blast radius, TWG bonus track): add the granular scope(s)
-  # matching your registered traversal when you set TWG_BLAST_RADIUS_QUERY_KEY.
+  # Blast-radius: related Jira work items via companion app's Jira REST bridge (read:jira-work in site app)

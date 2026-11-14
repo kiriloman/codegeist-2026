@@ -1,5 +1,7 @@
 // Faultline Companion — blast-radius endpoint via Jira REST API.
-// TWG requires user context (not available in webtriggers), so we query Jira
+// We query Jira REST because Teamwork Graph requires user-context impersonation
+// scopes not yet supported for Forge webtriggers. See src/risk/cql.js for the
+// tested TWG response parser, ready to wire when the platform adds support.
 // directly via `api.asApp().requestJira()` — a fully supported first-class
 // Forge API that works from unattended contexts.
 //
@@ -14,7 +16,7 @@
 import api, { route } from '@forge/api';
 import { parseBody, isAuthorized, jsonResponse } from './webtrigger-utils';
 
-export async function runTwgBlastRadius(req) {
+export async function runJiraBlastRadius(req) {
   if (!isAuthorized(req)) {
     return jsonResponse({ ok: false, reason: 'unauthorized' }, 401);
   }

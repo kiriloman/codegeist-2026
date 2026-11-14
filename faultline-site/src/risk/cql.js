@@ -1,6 +1,6 @@
 // Faultline — pure CQL / response-shaping helpers for the evidence layer.
 // Everything here is I/O-free so the evidence layer's logic is unit-testable
-// without a Confluence or Teamwork Graph connection. Pure functions, CJS.
+// without a Confluence or Confluence connection. Pure functions, CJS.
 
 const POSTMORTEM_FILTER =
   '(label = "postmortem" OR label = "incident-review" OR title ~ "postmortem")';
@@ -49,19 +49,4 @@ function mapConfluenceResults(json, siteUrl) {
   return { count, refs };
 }
 
-/**
- * Parse a Teamwork Graph customQuery response into a list of dependent
- * service names. Defensive by design: accepts a string array, or an array
- * of objects carrying name/title fields. Returns null when the shape is
- * unrecognizable (caller treats null as unavailable, not as zero dependents).
- */
-function parseTwgDependents(json) {
-  const raw = json?.data?.customQuery?.results;
-  if (!Array.isArray(raw)) return null;
-  const names = raw
-    .map((r) => (typeof r === 'string' ? r : r?.name || r?.title || null))
-    .filter(Boolean);
-  return names.length > 0 ? names : null;
-}
-
-module.exports = { buildPostmortemCql, escapeCqlPhrase, mapConfluenceResults, parseTwgDependents, POSTMORTEM_FILTER };
+module.exports = { buildPostmortemCql, escapeCqlPhrase, mapConfluenceResults, POSTMORTEM_FILTER };

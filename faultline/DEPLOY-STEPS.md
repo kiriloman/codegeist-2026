@@ -30,10 +30,10 @@ git push -u origin main
 3. **Paste the printed ARI** over the placeholder in `manifest.yml` (`app.id`).
 4. **Deploy:** `forge deploy` — expect validation feedback on the flagged schema points and fix them in this order:
    - `rovo:agent` fields (`icon` form, `title`/`name`, `actions` list shape)
-   - `permissions.fraudProtection` value (marked [VERIFY] in the manifest)
+   - `(removed)` value (marked  in the manifest)
    - scope strings (`read:pullrequest:bitbucket`, `write:pullrequest:bitbucket`, `read:repository:bitbucket`, `search:confluence`)
    - `rovo:action` display field (`name` vs `title`)
-5. **Install on your site:** `forge install --site faultline1.atlassian.net` (org admin needed once TWG scopes are added in Phase 3).
+5. **Install on your site:** `forge install --site faultline1.atlassian.net` (org admin needed).
 6. **Smoke test the auth fail-closed default:** with no variables set, the webtriggers reject everything — set the dev bypass for tunnel testing:
    ```bash
    forge variables set FAULTLINE_ALLOW_UNAUTHENTICATED 1
@@ -67,12 +67,12 @@ git push -u origin main
 
 ## PHASE 3 — Turn on the Jira blast-radius (bonus track)
 
-1. Register a persisted Cypher traversal mapping a Bitbucket repo URL → dependent services (follow the Jira blast-radius "persisted Cypher queries" guide in the Atlassian docs; the app sends `{ repoUrl }` and expects a list of service names — see `parseTwgDependents` in `src/risk/cql.js`).
+1. Register a persisted Cypher traversal mapping a Bitbucket repo URL → dependent services (follow the Jira blast-radius "persisted Cypher queries" guide in the Atlassian docs; the app sends `{ repoUrl }` and expects a list of service names — see `(removed)` in `src/risk/cql.js`).
 2. ```bash
-   # (blast radius uses Jira REST — no TWG registration needed) "<queryKey from registration>"
+   # (blast radius uses Jira REST via companion app — no registration needed)
    ```
 3. Uncomment/add the matching `read:graph:*` scope in `manifest.yml`, redeploy, reinstall (org admin).
-4. Re-run the demo PR → blast radius must show `graph` provenance (not "unavailable"). If the result shape differs, fix the single defensive mapper in `parseTwgDependents`.
+4. Re-run the demo PR → blast-radius evidence should appear as "related Jira work items".
 
 ## PHASE 4 — Prove the two interactive surfaces
 
@@ -82,7 +82,7 @@ git push -u origin main
 ## PHASE 5 — Record + submit (by Dec 13–15, first-come prizes)
 
 1. Record ≤5 min following the README demo script (money shot first 20s: 🔴 78/100 + "referenced in 2 postmortems" link click).
-2. Devpost submission — draft below. Scrub remaining [VERIFY] markers from the public README before submitting.
+2. Devpost submission — draft below. Scrub remaining  markers from the public README before submitting.
 3. Submit early; keep Dec 16–22 for judge-feedback fixes only.
 
 ---
@@ -101,4 +101,4 @@ git push -u origin main
 
 **Challenges / what we're proud of:** Every "AI review" tool has the LLM read the diff. Faultline's LLM never reads code — it only answers questions about deterministic, cited data. The hardest engineering is making honesty structural: unavailable evidence is rendered as unavailable, stacked heuristics are disclosed as beating evidence when they do, and the agent refuses to tell a reviewer to skip a file.
 
-**Built with:** Forge, Rovo agents, MCP, Jira blast-radius, Bitbucket REST API, Confluence CQL, KVS, React (UI Kit), Node.js.
+**Built with:** Forge, Rovo agents, MCP, Jira blast-radius, Bitbucket REST API, Confluence CQL, KVS, React (Custom UI), Node.js.

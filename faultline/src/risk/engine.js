@@ -1,7 +1,7 @@
 // Faultline v1.3 — deterministic blast-radius scoring engine.
 //
 // SIGNAL HIERARCHY: evidence outranks heuristics.
-//   Tier 1 — EVIDENCE:  postmortem references (Confluence), dependent services (Teamwork Graph)
+//   Tier 1 — EVIDENCE:  postmortem references (Confluence), dependent services (Jira REST search)
 //   Tier 2 — HEURISTIC: path-segment criticality, change size, commit churn, test-delta
 // The top weight of BOTH evidence signals (34 postmortem, 32 graph) exceeds the strongest
 // single heuristic (30) — the property the guide legend states and tests pin.
@@ -78,7 +78,7 @@ function scoreFile(file, history = {}) {
   // signals outrank any single heuristic — the invariant the guide legend states.
   const deps = history.dependents?.length || 0;
   if (deps > 0) {
-    const inferred = history.dependentsProvenance !== 'graph'; // TWG graph > Jira/inferred, half weight for non-graph sources
+    const inferred = history.dependentsProvenance !== 'graph'; // Jira search graph > Jira/inferred, half weight for non-graph sources
     let w = deps >= 5 ? 32 : deps >= 3 ? 20 : 10;
     if (inferred) w = Math.round(w / 2);
     score += w;
