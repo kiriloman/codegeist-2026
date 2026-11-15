@@ -1,43 +1,30 @@
 // Faultline — webtrigger entry for Bitbucket PR webhooks.
-// Handles all body shapes, fail-closed auth, never 500s (Bitbucket disables
-// failing webhooks), skips non-OPEN pull requests, and returns a proper
+// Handles all body shapes (webhook payloads carry repository.name, REST
+// payloads carry repository.slug — see pr-context.js), fail-closed auth
+// (Authorization header OR ?token= query param — Bitbucket webhooks cannot
+// send custom headers), never 500s (Bitbucket disables failing webhooks),
+// skips non-OPEN pull requests, and returns a proper
 // { body, headers, statusCode } shape.
 
 import { analyzePullRequest } from './analyze-pr';
 import { parseBody, isAuthorized, jsonResponse } from './webtrigger-utils';
+import { extractPrContext } from './pr-context';
 
 export async function runPrWebhook(req) {
   if (!isAuthorized(req)) {
     return jsonResponse({ ok: false, reason: 'unauthorized' }, 401);
   }
 
-  const body = parseBody(req);
-  const pr = body?.pullrequest;
-  const repository = body?.repository;
-  if (!pr || !repository) {
-    return jsonResponse({ ok: false, reason: 'not a pull request webhook payload' });
+  const ctx = extractPrContext(parseBody(req));
+  if (!ctx) {
+    return jsonResponse({ ok: false, reason: 'not an analysable pull request webhook payload' });
   }
-
-  // Only OPEN pull requests get analyzed — declined/merged PRs never get guides.
-  if (pr.state && pr.state !== 'OPEN') {
-    return jsonResponse({ ok: false, reason: `PR state is ${pr.state} — only OPEN pull requests are analyzed` });
-  }
-
-  const workspace = repository?.workspace?.slug || (repository?.full_name || '').split('/')[0];
-  const repo = repository?.slug;
-  const prId = pr?.id;
-  if (!workspace || !repo || !prId) {
-    return jsonResponse({ ok: false, reason: 'missing workspace/repo/pr id' });
+  if (ctx.skipped) {
+    return jsonResponse({ ok: false, reason: ctx.skipped });
   }
 
   try {
-    const result = await analyzePullRequest({
-      workspace,
-      repo,
-      prId,
-      title: pr.title || `PR #${prId}`,
-      author: pr.author?.display_name,
-    });
+    const result = await analyzePullRequest(ctx);
     return jsonResponse({
       ok: true,
       guidePosted: result.posted,

@@ -9,7 +9,7 @@
     "deploy": "npm run build && forge deploy",
     "install-app": "forge install",
     "tunnel": "forge tunnel",
-    "test": "node --test tests/engine.test.js tests/guide.test.js tests/cql.test.js"
+    "test": "node --test tests/engine.test.js tests/guide.test.js tests/cql.test.js tests/pr-webhook.test.js"
   },
   "dependencies": {
     "@forge/api": "^8.5.0",
