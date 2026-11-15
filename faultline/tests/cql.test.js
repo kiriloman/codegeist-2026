@@ -66,6 +66,18 @@ test('isAuthorized: token set → exact bearer required (fail-closed)', () => {
   delete process.env.FAULTLINE_ENDPOINT_TOKEN;
 });
 
+test('isAuthorized: token set → query-param token accepted (Bitbucket webhooks cannot send headers)', () => {
+  process.env.FAULTLINE_ENDPOINT_TOKEN = 'sekrit';
+  delete process.env.FAULTLINE_ALLOW_UNAUTHENTICATED;
+  assert.equal(isAuthorized({ headers: {}, queryParameters: { token: 'sekrit' } }), true, 'query param token accepted');
+  assert.equal(isAuthorized({ headers: {}, queryParameters: { token: ['sekrit'] } }), true, 'array-valued query param accepted');
+  assert.equal(isAuthorized({ headers: {}, queryParameters: { token: 'wrong' } }), false, 'wrong query token rejected');
+  assert.equal(isAuthorized({ headers: {}, queryParameters: {} }), false, 'no query token rejected');
+  assert.equal(isAuthorized({ headers: { Authorization: 'Bearer sekrit' }, queryParameters: { token: 'wrong' } }), true, 'either path alone suffices: bearer');
+  assert.equal(isAuthorized({ headers: { Authorization: 'Bearer wrong' }, queryParameters: { token: 'sekrit' } }), true, 'either path alone suffices: query');
+  delete process.env.FAULTLINE_ENDPOINT_TOKEN;
+});
+
 test('isAuthorized: no token configured → closed unless explicit dev bypass', () => {
   delete process.env.FAULTLINE_ENDPOINT_TOKEN;
   delete process.env.FAULTLINE_ALLOW_UNAUTHENTICATED;

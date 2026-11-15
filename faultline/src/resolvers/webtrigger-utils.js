@@ -34,10 +34,19 @@ function safeEqual(a, b) {
   return diff === 0;
 }
 
+/** Query parameters may arrive as Record<string,string> or string[] — normalize. */
+function queryValue(v) {
+  if (Array.isArray(v)) return v.join(',');
+  return String(v || '');
+}
+
 /**
  * Bearer-token gate — FAIL-CLOSED by default.
  *   Token set (forge variables set FAULTLINE_ENDPOINT_TOKEN "<secret>"):
- *     every request must carry `Authorization: Bearer <secret>`.
+ *     every request must carry `Authorization: Bearer <secret>` OR the same
+ *     secret as the `token` query parameter. The query form exists because
+ *     Bitbucket webhooks cannot send custom Authorization headers — the
+ *     webhook URL is registered with `?token=<secret>` appended.
  *   No token configured:
  *     requests are REJECTED unless the explicit dev bypass is set:
  *     forge variables set FAULTLINE_ALLOW_UNAUTHENTICATED 1
@@ -47,7 +56,10 @@ function isAuthorized(req) {
   if (required) {
     const headers = req?.headers || {};
     const auth = headerValue(headers['Authorization'] ?? headers.authorization);
-    return safeEqual(auth, `Bearer ${required}`);
+    if (safeEqual(auth, `Bearer ${required}`)) return true;
+    const qp = req?.queryParameters || {};
+    const token = queryValue(qp.token ?? qp.token);
+    return safeEqual(token, required);
   }
   return process.env.FAULTLINE_ALLOW_UNAUTHENTICATED === '1';
 }
@@ -60,4 +72,4 @@ function jsonResponse(payload, statusCode = 200) {
   };
 }
 
-module.exports = { parseBody, isAuthorized, jsonResponse, safeEqual, headerValue };
+module.exports = { parseBody, isAuthorized, jsonResponse, safeEqual, headerValue, queryValue };
