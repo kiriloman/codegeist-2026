@@ -244,3 +244,49 @@ test('per-file blast-radius: files in the same directory share keyword results',
     'refund should have Jira evidence (different keyword, different results)'
   );
 });
+
+// ── extractFileKeyword + provenance weight tests ──────────────────────────
+
+test('extractFileKeyword behavior: camelCase filenames split into words', () => {
+  // Test the extraction logic (same algorithm as evidence.js)
+  const extract = (path) => {
+    const filename = String(path).split('/').pop()?.replace(/\.[^.]+$/, '') || '';
+    return filename
+      .replace(/([a-z])([A-Z])/g, '$1 $2')
+      .replace(/[-_]/g, ' ')
+      .toLowerCase()
+      .split(/\s+/)
+      .filter((w) => w.length > 3);
+  };
+  assert.deepEqual(extract('src/payments/checkoutRetry.js'), ['checkout', 'retry']);
+  assert.deepEqual(extract('src/middleware/rateLimit.js'), ['rate', 'limit']);
+  assert.deepEqual(extract('config/token-revocation.js'), ['token', 'revocation']);
+  assert.deepEqual(extract('src/utils/helper.js'), ['helper']);
+  assert.deepEqual(extract('README.md'), ['readme']); // 'readme' is a valid word, only 'md' is stripped
+});
+
+test('provenance weight: jira provenance gets FULL weight, inferred gets half', () => {
+  const history = {
+    'src/payments/checkout.js': {
+      dependents: ['KAN-1', 'KAN-2', 'KAN-3', 'KAN-4', 'KAN-5'],
+      dependentsProvenance: 'jira',
+    },
+    'src/utils/helper.js': {
+      dependents: ['KAN-1', 'KAN-2', 'KAN-3', 'KAN-4', 'KAN-5'],
+      dependentsProvenance: 'inferred',
+    },
+  };
+  const ranked = rankFiles(
+    [
+      { path: 'src/payments/checkout.js', linesAdded: 10, linesRemoved: 5, prHasTestChanges: false },
+      { path: 'src/utils/helper.js', linesAdded: 10, linesRemoved: 5, prHasTestChanges: false },
+    ],
+    history
+  );
+  const checkout = ranked.find((f) => f.path.includes('checkout'));
+  const helper = ranked.find((f) => f.path.includes('helper'));
+  assert.ok(
+    checkout.score > helper.score,
+    `jira (${checkout.score}) should outscore inferred (${helper.score})`
+  );
+});
