@@ -91,44 +91,6 @@ export async function fetchPostmortemCounts(paths, cap = 15) {
 
 const unavailable = (reason) => ({ status: 'unavailable', reason, dependents: [], sourceUrl: null });
 
-/**
- * Related Jira work items matching this PR's service area (PR-level fallback).
- * Runs a title-keyword search against Jira via the companion site app's
- * authenticated bridge. Results are labeled 'jira' provenance and scored
- * at half weight (max 16 — deliberately below the strongest heuristic).
- */
-export async function fetchDependentServices({ workspace, repo, title }) {
-  if (!JIRA_BRIDGE_URL || !JIRA_BRIDGE_KEY) {
-    return unavailable('Jira bridge not configured (FAULTLINE_JIRA_BRIDGE_URL or FAULTLINE_JIRA_BRIDGE_KEY)');
-  }
-
-  const searchText = extractSearchKeyword(title);
-  if (!searchText) {
-    return unavailable('no distinctive keyword found in PR title for Jira search');
-  }
-
-  try {
-    const res = await fetch(JIRA_BRIDGE_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${SITE_APP_TOKEN}`,
-      },
-      body: JSON.stringify({ searchText }),
-    });
-    if (!res.ok) {
-      return unavailable(`Jira bridge responded ${res.status}`);
-    }
-    const json = await res.json();
-    if (json?.status === 'ok' && Array.isArray(json?.dependents)) {
-      return { status: 'ok', reason: null, dependents: json.dependents, sourceUrl: null };
-    }
-    return unavailable(json?.reason || 'Jira bridge returned unrecognized envelope');
-  } catch (e) {
-    return unavailable(`Jira bridge unreachable: ${String(e?.message || e)}`);
-  }
-}
-
 // ---------------------------------------------------------------------------
 // 3. Per-file Jira blast-radius (per-file evidence)
 // ---------------------------------------------------------------------------
