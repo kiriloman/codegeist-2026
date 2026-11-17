@@ -42,6 +42,29 @@ function extractSearchKeyword(title) {
   return words[0] || '';
 }
 
+/**
+ * Extract the most distinctive search keyword from a FILE PATH (not the PR title).
+ * For "services/payments/checkoutRetry.js" → "checkout retry"
+ * For "src/middleware/rateLimit.js" → "rate limit"
+ *
+ * This enables PER-FILE blast-radius evidence: each file searches Jira for its
+ * own service area rather than the PR title's blanket keyword.
+ */
+function extractFileKeyword(path) {
+  if (!path) return '';
+  const filename = String(path).split('/').pop()?.replace(/\.[^.]+$/, '') || '';
+  const words = filename
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    .replace(/[-_]/g, ' ')
+    .toLowerCase()
+    .split(/\s+/)
+    .filter((w) => w.length > 3 && !STOPWORDS.has(w));
+  if (words.length === 0) return '';
+  if (words.length === 1) return words[0];
+  words.sort((a, b) => b.length - a.length);
+  return words.slice(0, 2).join(' ');
+}
+
 // ---------------------------------------------------------------------------
 // 1. Postmortem evidence (Confluence) — via the companion site app
 // ---------------------------------------------------------------------------
