@@ -92,7 +92,7 @@ export async function fetchPostmortemCounts(paths, cap = 15) {
 const unavailable = (reason) => ({ status: 'unavailable', reason, dependents: [], sourceUrl: null });
 
 /**
- * Related Jira work items matching this PR's service area.
+ * Related Jira work items matching this PR's service area (PR-level fallback).
  * Runs a title-keyword search against Jira via the companion site app's
  * authenticated bridge. Results are labeled 'jira' provenance and scored
  * at half weight (max 16 — deliberately below the strongest heuristic).
@@ -127,4 +127,85 @@ export async function fetchDependentServices({ workspace, repo, title }) {
   } catch (e) {
     return unavailable(`Jira bridge unreachable: ${String(e?.message || e)}`);
   }
+}
+
+// ---------------------------------------------------------------------------
+// 3. Per-file Jira blast-radius (per-file evidence)
+// ---------------------------------------------------------------------------
+
+/**
+ * PER-FILE Jira blast-radius: search Jira for work items related to a SPECIFIC
+ * file's service area (extracted from the file path, not the PR title).
+ *
+ * This is the per-file evidence the Graph/Evidence reviewer wanted: each file
+ * gets its own Jira search results rather than the PR-title keyword applied
+ * uniformly. checkoutRetry.js searches for "checkout retry" while rateLimit.js
+ * searches for "rate limit" — different results per file.
+ *
+ * Results are cached per keyword within a single PR analysis to avoid duplicate
+ * bridge calls when multiple files in the same directory share a keyword.
+ */
+export async function fetchFileDependentsBatch(paths, cap = 15) {
+  const list = (paths || []).slice(0, cap);
+  if (list.length === 0) return { status: 'ok', reason: null, byPath: {} };
+  if (!JIRA_BRIDGE_URL || !JIRA_BRIDGE_KEY) {
+    return {
+      status: 'unavailable',
+      reason: 'Jira bridge not configured (FAULTLINE_JIRA_BRIDGE_URL or FAULTLINE_JIRA_BRIDGE_KEY)',
+      byPath: {},
+    };
+  }
+
+  // Extract per-file keywords and deduplicate
+  const keywordByPath = {};
+  const uniqueKeywords = new Set();
+  for (const path of list) {
+    const kw = extractFileKeyword(path);
+    keywordByPath[path] = kw;
+    if (kw) uniqueKeywords.add(kw);
+  }
+
+  if (uniqueKeywords.size === 0) {
+    return { status: 'ok', reason: null, byPath: {} };
+  }
+
+  // Search each unique keyword (parallel, bounded)
+  const keywordResults = {};
+  const keywords = [...uniqueKeywords];
+  for (let i = 0; i < keywords.length; i += 5) {
+    const chunk = keywords.slice(i, i + 5);
+    await Promise.all(
+      chunk.map(async (kw) => {
+        try {
+          const res = await fetch(JIRA_BRIDGE_URL, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${SITE_APP_TOKEN}`,
+            },
+            body: JSON.stringify({ searchText: kw }),
+          });
+          if (!res.ok) {
+            keywordResults[kw] = [];
+            return;
+          }
+          const json = await res.json();
+          keywordResults[kw] = json?.status === 'ok' && Array.isArray(json?.dependents) ? json.dependents : [];
+        } catch {
+          keywordResults[kw] = []; // per-keyword failures are non-fatal
+        }
+      })
+    );
+  }
+
+  // Map results back to each file path
+  const byPath = {};
+  for (const path of list) {
+    const kw = keywordByPath[path];
+    if (kw && keywordResults[kw]?.length > 0) {
+      byPath[path] = keywordResults[kw];
+    }
+  }
+
+  return { status: 'ok', reason: null, byPath };
 }

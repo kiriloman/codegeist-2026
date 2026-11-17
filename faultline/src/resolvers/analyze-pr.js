@@ -9,7 +9,7 @@ import api, { route } from '@forge/api';
 import { rankFiles, TEST_HINT, SOURCE_HINT } from '../risk/engine';
 import { renderGuide, renderChatDigest } from '../risk/guide';
 import { saveAnalysis, getAnalysis } from '../storage';
-import { fetchPostmortemCounts, fetchDependentServices } from './evidence';
+import { fetchPostmortemCounts, fetchFileDependentsBatch } from './evidence';
 
 const GUIDE_FORMAT = process.env.FAULTLINE_GUIDE_FORMAT === 'list' ? 'list' : 'table';
 
@@ -116,9 +116,9 @@ export async function analyzePullRequest({ workspace, repo, prId, title, author 
   // Evidence layer + churn — parallel at the top level, chunked within,
   // with statuses that the guide renders on failure.
   const capped = files.slice(0, 25);
-  const [postmortems, blast, touchList] = await Promise.all([
+  const [postmortems, fileBlast, touchList] = await Promise.all([
     fetchPostmortemCounts(files.map((f) => f.path)),
-    fetchDependentServices({ workspace, repo, title }),
+    fetchFileDependentsBatch(capped.map((f) => f.path)),
     mapChunked(capped, 6, (f) =>
       fetchFileTouchCount(workspace, repo, f.path).catch(() => ({ touchCount: 0 }))
     ),
@@ -127,15 +127,15 @@ export async function analyzePullRequest({ workspace, repo, prId, title, author 
   const lookup = {};
   capped.forEach((f, i) => {
     const isCode = SOURCE_HINT.test(f.path) && !TEST_HINT.test(f.path);
+    const perFileDependents = fileBlast.byPath[f.path];
     lookup[f.path] = {
       ...touchList[i],
       incidentCount: postmortems.byPath[f.path]?.count || 0,
       incidentRefs: postmortems.byPath[f.path]?.refs || [],
-      ...(isCode && blast.status === 'ok' && blast.dependents.length > 0
+      ...(isCode && perFileDependents && perFileDependents.length > 0
         ? {
-            dependents: blast.dependents,
+            dependents: perFileDependents,
             dependentsProvenance: 'jira',
-            dependentsSourceUrl: blast.sourceUrl,
           }
         : {}),
     };
@@ -149,8 +149,8 @@ export async function analyzePullRequest({ workspace, repo, prId, title, author 
   const meta = {
     postmortemsStatus: postmortems.status,
     postmortemsReason: postmortems.reason,
-    blastStatus: blast.status,
-    blastReason: blast.reason,
+    blastStatus: fileBlast.status,
+    blastReason: fileBlast.reason,
     filesTotal,
     evidencePathsCovered: Math.min(files.length, 15),
     format: GUIDE_FORMAT,
@@ -172,7 +172,7 @@ export async function analyzePullRequest({ workspace, repo, prId, title, author 
   await saveAnalysis(workspace, repo, prId, {
     title, author, digest, ranked, commentId,
     postmortemsStatus: postmortems.status,
-    blastStatus: blast.status,
+    blastStatus: fileBlast.status,
     posted: Boolean(commentId),
   }).catch((e) => {
     console.warn(`storage write unavailable (non-fatal, digest not saved): ${e?.message || e}`);

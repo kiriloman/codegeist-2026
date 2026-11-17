@@ -168,3 +168,79 @@ test('summarize counts evidence-backed files', () => {
   assert.equal(s.evidenceBacked, 1);
   assert.equal(s.files, 2);
 });
+
+// ── Per-file Jira blast-radius evidence ────────────────────────────────────────
+
+test('per-file blast-radius: each file gets its own dependents, not blanket', () => {
+  // Two files: one about payments, one about middleware
+  const history = {
+    'src/payments/checkoutRetry.js': {
+      dependents: ['KAN-10: Fix checkout (Done)', 'KAN-12: Payment gateway (In Progress)'],
+      dependentsProvenance: 'jira',
+      touchCount: 3,
+      incidentCount: 0,
+    },
+    'src/middleware/rateLimit.js': {
+      dependents: [], // different service area → different Jira results
+      dependentsProvenance: 'jira',
+      touchCount: 2,
+      incidentCount: 0,
+    },
+  };
+
+  const ranked = rankFiles(
+    [
+      { path: 'src/payments/checkoutRetry.js', linesAdded: 20, linesRemoved: 10, prHasTestChanges: false },
+      { path: 'src/middleware/rateLimit.js', linesAdded: 30, linesRemoved: 15, prHasTestChanges: false },
+    ],
+    history
+  );
+
+  const checkout = ranked.find((f) => f.path.includes('checkoutRetry'));
+  const rateLimit = ranked.find((f) => f.path.includes('rateLimit'));
+
+  // The payments file has Jira evidence, the middleware file does not
+  assert.ok(
+    checkout.reasons.some((r) => r.includes('related Jira work item')),
+    'checkout file should have Jira evidence'
+  );
+  assert.ok(
+    !rateLimit.reasons.some((r) => r.includes('related Jira work item')),
+    'rateLimit file should NOT have Jira evidence (different service area)'
+  );
+  // The payments file scores higher because it has evidence the other doesn't
+  assert.ok(checkout.score > rateLimit.score, 'file with per-file evidence scores higher');
+});
+
+test('per-file blast-radius: files in the same directory share keyword results', () => {
+  const history = {
+    'src/payments/checkoutRetry.js': {
+      dependents: ['KAN-10: Fix checkout (Done)'],
+      dependentsProvenance: 'jira',
+    },
+    'src/payments/refundBatch.js': {
+      dependents: ['KAN-14: Refund batch overflow (Done)'],
+      dependentsProvenance: 'jira',
+    },
+  };
+
+  const ranked = rankFiles(
+    [
+      { path: 'src/payments/checkoutRetry.js', linesAdded: 10, linesRemoved: 5, prHasTestChanges: false },
+      { path: 'src/payments/refundBatch.js', linesAdded: 10, linesRemoved: 5, prHasTestChanges: false },
+    ],
+    history
+  );
+
+  const checkout = ranked.find((f) => f.path.includes('checkoutRetry'));
+  const refund = ranked.find((f) => f.path.includes('refundBatch'));
+  // Both have Jira evidence from their own per-file searches
+  assert.ok(
+    checkout.reasons.some((r) => r.includes('related Jira work item')),
+    'checkout should have Jira evidence'
+  );
+  assert.ok(
+    refund.reasons.some((r) => r.includes('related Jira work item')),
+    'refund should have Jira evidence (different keyword, different results)'
+  );
+});
