@@ -11,6 +11,19 @@ import { renderGuide, renderChatDigest } from '../risk/guide';
 import { saveAnalysis, getAnalysis } from '../storage';
 import { fetchPostmortemCounts, fetchFileDependentsBatch } from './evidence';
 
+/** Extract a search keyword from a file path for Jira URL construction. */
+function extractFileKeywordFromPath(path) {
+  const filename = String(path).split('/').pop()?.replace(/\.[^.]+$/, '') || '';
+  return filename
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    .replace(/[-_]/g, ' ')
+    .toLowerCase()
+    .split(/\s+/)
+    .filter((w) => w.length > 3)
+    .slice(0, 2)
+    .join(' ');
+}
+
 const GUIDE_FORMAT = process.env.FAULTLINE_GUIDE_FORMAT === 'list' ? 'list' : 'table';
 
 // --- Bitbucket Cloud REST helpers -------------------------------------------
@@ -128,6 +141,13 @@ export async function analyzePullRequest({ workspace, repo, prId, title, author 
   capped.forEach((f, i) => {
     const isCode = SOURCE_HINT.test(f.path) && !TEST_HINT.test(f.path);
     const perFileDependents = fileBlast.byPath[f.path];
+    // Construct a clickable Jira search URL for this file's keyword
+    const fileKeyword = perFileDependents && perFileDependents.length > 0
+      ? extractFileKeywordFromPath(f.path)
+      : null;
+    const jiraSearchUrl = fileKeyword
+      ? `https://faultline1.atlassian.net/issues/?jql=${encodeURIComponent(`summary ~ "${fileKeyword}" OR description ~ "${fileKeyword}" ORDER BY created DESC`)}`
+      : null;
     lookup[f.path] = {
       ...touchList[i],
       incidentCount: postmortems.byPath[f.path]?.count || 0,
@@ -136,6 +156,7 @@ export async function analyzePullRequest({ workspace, repo, prId, title, author 
         ? {
             dependents: perFileDependents,
             dependentsProvenance: 'jira',
+            dependentsSourceUrl: jiraSearchUrl,
           }
         : {}),
     };
